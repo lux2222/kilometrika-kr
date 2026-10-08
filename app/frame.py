@@ -22,7 +22,7 @@ def _local(iso: str) -> datetime:
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 800, 480
-RENDER_VERSION = 9   # менять при правках макета — форсирует перерисовку рамки
+RENDER_VERSION = 10  # менять при правках макета — форсирует перерисовку рамки
 
 FRAME_LANG = os.environ.get("FRAME_LANG", "ru")   # язык кадра: ru | en
 _L10N = {
@@ -109,7 +109,10 @@ def _last_of(acts, category: str) -> dict | None:
 
 
 def _fmt_km(v: float) -> str:
-    return f"{v:.1f}" if v < 100 else f"{v:.0f}"
+    # Десятые везде, чтобы бег и велосипед выглядели одинаково; целое — только
+    # для очень больших значений (годовой пробег ≥ 1000 км), где десятая доля
+    # всё равно шум, а лишний знак не влезает в колонку.
+    return f"{v:.0f}" if v >= 1000 else f"{v:.1f}"
 
 
 # ---------------------------------------------------------------- layout
