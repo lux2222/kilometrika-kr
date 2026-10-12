@@ -89,6 +89,7 @@
   .uprog .bar { height: 4px; border-radius: 3px; background: var(--line); margin-top: 4px; overflow: hidden; }
   .uprog .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
   .uprog.err .bar { display: none; }
+  #notesStatus.err { color: var(--hr); }
   button.del {
     background: none; border: 1px solid var(--line); color: var(--dim);
     border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px;
@@ -475,12 +476,20 @@ $("#delBtn").onclick = async () => {
 
 $("#notesSave").onclick = async () => {
   if (!selectedId) return;
-  await fetch(`/api/activities/${selectedId}/notes`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ notes: $("#notes").value }),
-  });
-  $("#notesStatus").textContent = "сохранено";
-  setTimeout(() => $("#notesStatus").textContent = "", 2000);
+  const st = $("#notesStatus");
+  st.classList.remove("err"); st.textContent = "сохранение…";
+  try {
+    const r = await fetch(`/api/activities/${selectedId}/notes`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: $("#notes").value }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    st.textContent = "сохранено";
+    setTimeout(() => { if (st.textContent === "сохранено") st.textContent = ""; }, 2000);
+  } catch {
+    st.classList.add("err");
+    st.textContent = "не сохранено — проверь связь и повтори";
+  }
 };
 
 function renderPhotos(photos) {
