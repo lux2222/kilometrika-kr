@@ -560,7 +560,8 @@ async function uploadBatch(files, url, prog) {
 }
 
 $("#photoInput").onchange = async e => {
-  const files = e.target.files; e.target.value = "";
+  // копия ДО очистки: e.target.files — живой FileList, value="" опустошает его
+  const files = [...e.target.files]; e.target.value = "";
   await uploadBatch(files, `/api/activities/${selectedId}/photos`, $("#photoProg"));
   showActivity(selectedId);
 };
