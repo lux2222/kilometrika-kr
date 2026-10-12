@@ -221,6 +221,19 @@ let selectedId = null, weeklyChart = null, actChart = null;
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
+// запрос-действие с честным результатом: при ошибке/обрыве говорим об этом,
+// а не делаем вид, что всё прошло (удаление, смена категории)
+async function send(url, opts) {
+  try {
+    const r = await fetch(url, opts);
+    if (r.ok) return true;
+    alert(`Не удалось: HTTP ${r.status}`);
+  } catch {
+    alert("Не удалось: нет связи с сервером");
+  }
+  return false;
+}
+
 const fmtDur = s => {
   s = s || 0;
   const h = Math.floor(s/3600), m = Math.floor(s%3600/60);
@@ -247,8 +260,15 @@ const pace = (dur, dist) => {
 const YEARS_KEY = "kmYearsOpen";
 const yearsOpen = JSON.parse(localStorage.getItem(YEARS_KEY) || "{}");
 
-async function loadList() {
-  const acts = await (await fetch("/api/activities")).json();
+// общий кэш: одним запросом и для списка, и для графика
+let allActs = [];
+async function reload() {
+  allActs = await (await fetch("/api/activities")).json();
+  loadList(); loadWeekly();
+}
+
+function loadList() {
+  const acts = allActs;
   $("#counter").textContent = acts.length + " активностей";
   const list = $("#list");
   list.innerHTML = acts.length ? "" : '<div class="muted">Пока пусто</div>';
@@ -282,6 +302,7 @@ async function loadList() {
     for (const a of items) {
       const el = document.createElement("div");
       el.className = "act" + (a.id === selectedId ? " sel" : "");
+      el.dataset.id = a.id;
       el.style.setProperty("--sport-c", catColor(a));
       el.innerHTML = `<div>${fmtDate(a.start_time)}<div class="sport">${esc(a.sport)}</div></div>
                       <div class="dist">${((a.distance_m||0)/1000).toFixed(1)} км</div>`;
@@ -311,8 +332,8 @@ function periodKey(dateStr, period) {
   return `${t.getUTCFullYear()}-W${String(w).padStart(2,"0")}`;
 }
 
-async function loadWeekly() {
-  const acts = await (await fetch("/api/activities")).json();
+function loadWeekly() {
+  const acts = allActs;
   const byKey = {};
   for (const a of acts) {
     if (!a.start_time) continue;
@@ -395,13 +416,26 @@ function renderSplits(splits, color) {
   }
 }
 
+// номер последнего запроса показа: ответы приходят в любом порядке (VPN),
+// рисуем только самый свежий выбор. selectedId меняется лишь вместе с панелью —
+// поэтому заметки, фото и категория всегда уходят в ту тренировку, что на экране.
+let showSeq = 0;
+
+function markSelected() {
+  document.querySelectorAll("#list .act").forEach(el =>
+    el.classList.toggle("sel", +el.dataset.id === selectedId));
+}
+
 async function showActivity(id) {
-  selectedId = id;
-  const [act, tps, splits] = await Promise.all([
-    (await fetch(`/api/activities/${id}`)).json(),
-    (await fetch(`/api/activities/${id}/trackpoints?step=3`)).json(),
-    (await fetch(`/api/activities/${id}/splits`)).json(),
+  const seq = ++showSeq;
+  const [act, tps, splits] = await Promise.all([      // параллельно, не по очереди
+    fetch(`/api/activities/${id}`).then(r => r.json()),
+    fetch(`/api/activities/${id}/trackpoints?step=3`).then(r => r.json()),
+    fetch(`/api/activities/${id}/splits`).then(r => r.json()),
   ]);
+  if (seq !== showSeq) return;        // пока ждали, выбрали другую тренировку
+  selectedId = id;
+  markSelected();
   $("#placeholder").hidden = true;
   $("#detail").hidden = false;
   const sc = catColor(act);
@@ -453,25 +487,25 @@ async function showActivity(id) {
       }
     }
   });
-  loadList();
 }
 
 document.querySelectorAll("#catSeg button").forEach(b => b.onclick = async () => {
   if (!selectedId || b.classList.contains("on")) return;
-  await fetch(`/api/activities/${selectedId}/category`, {
+  if (!await send(`/api/activities/${selectedId}/category`, {
     method: "PATCH", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ category: b.dataset.c }),
-  });
-  showActivity(selectedId);       // перерисует детали и список
-  loadWeekly();
+  })) return;
+  showActivity(selectedId);       // детали — с новым цветом
+  reload();                       // список и график — категория меняет итоги
 });
 
 $("#delBtn").onclick = async () => {
   if (!selectedId || !confirm("Удалить тренировку?")) return;
-  await fetch(`/api/activities/${selectedId}`, { method: "DELETE" });
+  if (!await send(`/api/activities/${selectedId}`, { method: "DELETE" })) return;
+  showSeq++;                      // отменить ещё не дорисованный showActivity
   selectedId = null;
   $("#detail").hidden = true; $("#placeholder").hidden = false;
-  loadList(); loadWeekly();
+  reload();
 };
 
 $("#notesSave").onclick = async () => {
@@ -506,8 +540,7 @@ function renderPhotos(photos) {
     if (m) m.onclick = () => window.open(`/api/photos/${p.id}`, "_blank");
     el.querySelector("button").onclick = async () => {
       if (!confirm("Удалить фото?")) return;
-      await fetch(`/api/photos/${p.id}`, { method: "DELETE" });
-      el.remove();
+      if (await send(`/api/photos/${p.id}`, { method: "DELETE" })) el.remove();
     };
     grid.appendChild(el);
   }
@@ -536,6 +569,7 @@ async function uploadBatch(files, url, prog) {
   files = [...files];
   if (!files.length) return;
   const txt = prog.querySelector(".t"), bar = prog.querySelector(".bar > i");
+  clearTimeout(prog._hideT);      // таймер от прошлой партии не должен спрятать эту
   prog.hidden = false; prog.classList.remove("err");
   prog.scrollIntoView({ block: "nearest" });
   let ok = 0; const errors = [];
@@ -555,7 +589,7 @@ async function uploadBatch(files, url, prog) {
     txt.textContent = `✗ ${errors.join("; ")}` + (ok ? ` · добавлено ${ok}` : "");
   } else {
     bar.style.width = "100%"; txt.textContent = `✓ Загружено: ${ok}`;
-    setTimeout(() => { if (!prog.classList.contains("err")) prog.hidden = true; }, 4000);
+    prog._hideT = setTimeout(() => { prog.hidden = true; }, 4000);
   }
 }
 
@@ -568,16 +602,20 @@ $("#photoInput").onchange = async e => {
 
 async function uploadFiles(files) {
   await uploadBatch(files, "/api/upload", $("#dropProg"));
-  loadList(); loadWeekly();
+  reload();
 }
 const drop = $("#drop");
 drop.onclick = () => $("#fileInput").click();
-$("#fileInput").onchange = e => uploadFiles(e.target.files);
+$("#fileInput").onchange = e => {
+  // копия + сброс: иначе повторный выбор того же файла (после сбоя) не сработает
+  const files = [...e.target.files]; e.target.value = "";
+  uploadFiles(files);
+};
 drop.ondragover = e => { e.preventDefault(); drop.classList.add("hover"); };
 drop.ondragleave = () => drop.classList.remove("hover");
 drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover"); uploadFiles(e.dataTransfer.files); };
 
-loadList(); loadWeekly();
+reload();
 </script>
 </body>
 </html>
