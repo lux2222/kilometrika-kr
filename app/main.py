@@ -465,7 +465,10 @@ def frame_png(request: Request):
 
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).parent / "static" / "index.html")
+    # no-cache: браузер обязан перепроверять страницу (по ETag) на каждом заходе,
+    # иначе после деплоя крутится старый index.html из кэша — загрузка «в пустоту».
+    return FileResponse(Path(__file__).parent / "static" / "index.html",
+                        headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"))
