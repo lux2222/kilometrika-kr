@@ -1,196 +1,83 @@
-# Kilometrika
+# Kilometrika — 개인용 UI 확장 포크
 
-![tests](https://github.com/m1ty/kilometrika/actions/workflows/tests.yml/badge.svg)
+원본: [m1ty/kilometrika](https://github.com/m1ty/kilometrika), 기준 커밋 `601a0f02ef5a`.
+`m1ty/kilometrika` 기반 한국어 커스텀 버전입니다. 대상 [lux2222/kilometrika-kr](https://github.com/lux2222/kilometrika-kr)는 GitHub에서 원본의 포크 관계를 유지합니다. 원본 Git 이력과 MIT LICENSE의 `Copyright (c) 2026 m1ty`를 보존합니다.
 
-![Kilometrika stats card on a Waveshare e-ink frame](docs/frame-photo.jpg)
+TCX/GPX 운동 파일을 SQLite에 저장하고 활동 목록·지도·차트를 표시합니다. 기존 개인 기록이나 복구된 DB 없이 빈 데이터 볼륨에서 시작할 수 있습니다.
 
-**Kilometrika** (from the Russian «километр» + metrics) is a small self-hosted training log: it collects workout files in TCX and GPX formats and turns them into a dashboard — and into a stats card for an e-ink photo frame on your shelf. Drop files in, get a dashboard: per-activity heart rate / speed / elevation charts, a GPS track on a map, and distance totals by week, month, or year — split by sport.
+## 주요 변경
 
-Built for a homelab: single container or a plain systemd service, SQLite storage, no cloud, no accounts. Your GPS tracks stay on your hardware.
+- 한국어 목록·상세 화면, 모바일 표시, 지도 시작/종료 표시 및 속도·심박 그래프 개선.
+- 상세 화면 이미지 내보내기와 로컬 html2canvas 자산.
+- `Other` 활동의 근력운동 수동 분류, 근력운동 전용 심박 화면 및 원본 TCX 기반 HR 구간 분석.
+- 원본 archive와 저장된 해시를 확인하는 누락 데이터 복구. 원본이 없거나 검증되지 않으면 복구·분석 불가로 표시합니다.
+- GPS 활동의 시작 시각·지역에 대한 외부 날씨 추정치 표시.
 
-*Русская версия: [README.ru.md](README.ru.md)*
+측정값, 계산값, 외부 추정치는 서로 다릅니다. 결측 심박·GPS를 실제 측정값처럼 생성하지 않습니다. 기존 파서에는 GPS 기반 거리·속도 계산이 있으며 이는 센서 측정값과 구분해야 합니다.
 
-## The dashboard
+## Docker 실행과 종료
 
-![Kilometrika dashboard](docs/dashboard.png)
-
-Activity list color-coded by sport, stacked weekly/monthly/yearly distance chart, and a per-activity view: summary cards, GPS track on a dark map, aligned HR / speed / elevation chart, notes, and photo attachments.
-
-## Features
-
-- **Two ingestion paths** — drag & drop in the web UI, or a watch folder you can expose over SMB/FTP and feed from a phone or NAS. Deduplication by content hash (SHA-256).
-- **Robust parsing** — powered by [tcxreader](https://github.com/alenrajsp/tcxreader); handles Garmin, Polar, Suunto, Zwift and friends, including TPX extensions (Speed, Watts).
-- **Degraded exports welcome** — some apps (e.g. Huawei Health / Mi Fitness) export TCX with GPS only: no per-point distance, speed, heart rate or calories. The parser reconstructs cumulative distance and speed from coordinates (haversine, with GPS-jitter filtering), so charts and pace still work. Heart rate can't be invented — see [Getting full data out of Huawei Health](#getting-full-data-out-of-huawei-health).
-- **Dashboard** — activity list color-coded by sport (running / cycling / other), stacked distance chart with a week / month / year toggle, and a per-activity view: summary cards, GPS track on a dark Leaflet map with start/finish markers, and an aligned HR / speed / elevation chart over distance.
-- **Training diary** — free-form notes ("how did it go"), photo and video attachments on every activity, stored next to the database. Uploads are streamed to disk (500 MB per video), playback supports seeking via range requests.
-- **REST API** — everything the UI shows is available as JSON, convenient for pandas / Jupyter deep dives.
-- **Optional Home Assistant bridge** — the service publishes a retained MQTT message with per-sport (run / bike) weekly, monthly and yearly totals after each import and hourly; ready-made sensor config below.
-- **E-ink photo frame endpoint** — `GET /api/frame.png` renders a 800×480 landscape stats card in the Spectra 6 palette: running and cycling halves with sport pictograms, the latest workout of each, and calendar week / month / year totals. ETag / `304 Not Modified` support means the frame only redraws when something actually changed. Point [esp32-photoframe](https://github.com/aitjcize/esp32-photoframe)'s URL rotation at it.
-- **Crash-proof watcher** — parse errors go to a `failed/` folder, permission problems on the watch folder are logged and skipped instead of killing the loop.
-
-## Quick start (Docker)
+Docker Engine과 Docker Compose가 필요합니다. 저장소 루트에서:
 
 ```bash
-docker compose up -d --build
-# UI: http://<host>:8000
+docker compose -p kilometrika-fork up -d --build
+# 브라우저: http://127.0.0.1:8000
+docker compose -p kilometrika-fork logs --tail=100
+# 컨테이너 종료, 데이터 볼륨 유지
+docker compose -p kilometrika-fork stop
+# 다시 실행
+docker compose -p kilometrika-fork start
 ```
 
-Data lives in `./data`:
+다른 로컬 포트가 필요하면 실행 명령 앞에 `APP_PORT=18000`을 붙입니다. 기본 바인딩은 `127.0.0.1`입니다. 인증 기능이 없으므로 공용 인터넷에 직접 노출하지 마세요.
 
-```
-data/
-├── tcx.db      # SQLite: activities + trackpoints
-├── inbox/      # drop .tcx / .gpx files here — picked up automatically
-├── archive/    # successfully imported
-└── failed/     # files that failed to parse
-```
+Compose는 이 저장소의 `Dockerfile`과 `requirements.txt`, 전체 `app/` 및 정적 자산으로 빌드합니다. 운영 컨테이너나 로컬 전용 Kilometrika 이미지, `Dockerfile.ui`는 필요하지 않습니다. Python 기본 이미지·OS 패키지·Python 의존성을 받는 네트워크 연결은 필요합니다. 기본 이미지 태그와 일부 의존성 버전 범위가 가변적이므로 완전한 재현 빌드를 보장하지 않습니다.
 
-The inbox is polled every `WATCH_INTERVAL` seconds (default 30). To feed it from a NAS or router share, bind-mount the share over the inbox:
+## 데이터 위치와 백업
 
-```yaml
-volumes:
-  - ./data:/data
-  - /mnt/my-share:/data/inbox
-```
-
-## Quick start (bare metal / LXC, no Docker)
-
-Runs fine as a plain systemd service — handy in a Proxmox LXC where Docker-in-LXC is more trouble than it's worth.
+위 프로젝트명을 사용하면 Docker named volume `kilometrika-fork_kilometrika-data`가 컨테이너 `/data`에 연결됩니다. 호스트의 개인 디렉터리를 연결하지 않습니다. DB `tcx.db`, `inbox/`, `archive/`, `failed/` 및 첨부 자료가 이 볼륨에 저장됩니다.
 
 ```bash
-apt install -y python3-venv
-useradd -r -m -d /opt/kilometrika -s /usr/sbin/nologin kilometrika
-# copy the repo into /opt/kilometrika, then:
-cd /opt/kilometrika
-python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
-chown -R kilometrika:kilometrika /opt/kilometrika
+# Docker가 관리하는 실제 볼륨 위치 조회
+docker volume inspect kilometrika-fork_kilometrika-data --format '{{.Mountpoint}}'
+# 쓰기를 중단한 상태로 볼륨 전체 백업
+mkdir -p backups
+docker compose -p kilometrika-fork stop
+docker compose -p kilometrika-fork run --rm --no-deps -T --entrypoint tar kilometrika -C /data -czf - . > "backups/kilometrika-$(date +%Y%m%d-%H%M%S).tar.gz"
+# 백업 명령 성공 및 파일 확인 후 다시 시작
+docker compose -p kilometrika-fork start
 ```
 
-`/etc/systemd/system/kilometrika.service`:
+백업에는 개인 운동 자료가 포함되므로 Git에 추가하지 마세요. `docker compose down -v`는 데이터 볼륨을 삭제하므로 사용하지 마세요. 다른 프로젝트명을 썼다면 모든 명령에 같은 이름을 사용해야 합니다.
 
-```ini
-[Unit]
-Description=Kilometrika
-After=network-online.target
-Wants=network-online.target
+## Other → 근력운동 수동 분류
 
-[Service]
-Type=simple
-User=kilometrika
-Group=kilometrika
-WorkingDirectory=/opt/kilometrika/app
-Environment=DATA_DIR=/opt/kilometrika/data
-ExecStart=/opt/kilometrika/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
-Restart=on-failure
-RestartSec=5
-NoNewPrivileges=true
-ProtectSystem=strict
-ReadWritePaths=/opt/kilometrika/data
-PrivateTmp=true
+TCX의 `Other`만으로 근력운동이라고 자동 판정하지 않습니다. 활동 상세 화면의 **운동 관리 · 기존 기능 → 근력운동**을 선택하면 해당 기록의 category가 `strength`로 저장됩니다. API는 `PATCH /api/activities/{id}/category`에 `{"category":"strength"}`를 받습니다.
 
-[Install]
-WantedBy=multi-user.target
-```
+화면 분기는 특정 개인 기록 ID가 아니라 category를 사용합니다. 근력운동에서는 지도·속도 대신 심박 중심으로 표시합니다. 누락 복구에는 해당 기록과 해시가 일치하는 원본 TCX가 필요합니다. HR 구간 분석도 `/data/archive`의 원본을 읽으며, 데이터가 없으면 분석 불가로 처리합니다.
 
-```bash
-systemctl daemon-reload && systemctl enable --now kilometrika
-```
+## 개인용 HR 구간 설정
 
-Set the host timezone so dashboard and frame dates are shown local, not UTC: `timedatectl set-timezone Europe/Moscow` (or pass `TZ=` in the unit / docker-compose).
+실제 설정은 **`app/hr_zones.py`의 `ZONES` 상수**입니다. 각 항목은 `(구간명, 최소 bpm, 최대 bpm)`이며 양 끝을 포함하는 정수 범위입니다. 현재 값은 개인용 수동 설정이지 보편적인 운동 처방이 아닙니다.
 
-If the watch folder is a CIFS/NFS mount, make sure the `kilometrika` user can **write** to it — the watcher moves files out of the inbox after import. In an unprivileged LXC, remember the uid shift: mount with `uid=<uid of kilometrika inside> + 100000`.
+자신에게 맞게 `ZONES`를 직접 수정하고 `docker compose -p kilometrika-fork up -d --build`로 다시 빌드·실행해야 합니다. UI 설정창, 사용자별 프로필, 환경변수 기반 HR 구간 설정은 없습니다. UI 구간 표시는 API의 `criteria.zones_bpm`을 사용합니다. 같은 파일의 `MAX_GAP_SECONDS`는 인접 측정 간격의 분석 한계이며, 결측 시간을 휴식으로 단정하지 않습니다.
 
-## Configuration
+## 외부 연결과 개인정보
 
-Everything is environment variables:
+Chart.js·Leaflet·html2canvas는 로컬 `app/static/vendor/`에서 제공합니다. 지도 배경은 OpenStreetMap 타일 서버에 연결합니다.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `DATA_DIR` | `/data` | database + inbox/archive/failed root |
-| `WATCH_INTERVAL` | `30` | inbox poll period, seconds |
-| `MQTT_HOST` | *(empty = off)* | MQTT broker for the Home Assistant bridge |
-| `MQTT_PORT` | `1883` | |
-| `MQTT_USER` / `MQTT_PASS` | *(empty)* | |
-| `MQTT_PREFIX` | `kilometrika` | topic prefix |
-| `FRAME_LANG` | `ru` | e-ink card language: `ru` or `en` |
+날씨는 `app/static/index.html`의 `weatherRequest()` / `loadActivityWeather()`에서 브라우저가 Open-Meteo에 직접 요청합니다. 최근 활동은 `api.open-meteo.com`, 과거 활동은 `archive-api.open-meteo.com`을 사용합니다. 첫 유효 GPS 좌표와 운동 날짜가 외부 서비스로 전송됩니다. 표시값은 지역·시간 기준 추정치이지 운동기기의 측정값이 아닙니다. 이 구현에는 API 키 입력 설정이 없습니다. 연결 차단·응답 실패·GPS 부재 시 날씨는 표시하지 않습니다. 외부 전송을 원치 않으면 해당 호출 코드를 수정해야 하며, 별도 UI 토글은 없습니다.
 
-## API
+Compose에서 `TZ`, `WATCH_INTERVAL`, 선택적 `MQTT_*`, `FRAME_LANG`을 지정할 수 있습니다. MQTT는 기본 비활성입니다. 비밀값은 로컬 환경에만 설정하고 저장소에 넣지 마세요. 한국어 UI 날짜 표시는 현재 `app/static/index.html`에서 `Asia/Seoul`로 고정되어 있으므로 컨테이너 `TZ`만으로 UI 시간대가 바뀌지는 않습니다.
 
-```
-POST   /api/upload                              upload a .tcx / .gpx file
-GET    /api/activities                          list all activities
-GET    /api/activities/{id}                     details + laps + notes + photos
-GET    /api/activities/{id}/trackpoints?step=N  point series (step=N thins it)
-PATCH  /api/activities/{id}/notes               save workout notes
-POST   /api/activities/{id}/photos              attach a photo
-GET    /api/photos/{photo_id}                   serve a photo
-DELETE /api/photos/{photo_id}
-DELETE /api/activities/{id}
-GET    /api/summary/weekly?weeks=12             weekly totals
-GET    /api/frame.png                           e-ink stats card (ETag / 304)
-```
+## 테스트와 라이선스
 
-## The e-ink frame
+**확인 완료:** 전체 앱 소스 Docker 빌드, 운영 데이터와 분리된 빈 named volume 기동, 기본 페이지·활동/요약 API 응답, 브라우저 빈 화면 및 로컬 Chart.js·Leaflet·html2canvas 로딩, 개인 데이터 없는 복구 회귀 테스트 1개 통과. 이미지 내부 앱 파일과 빌드 소스의 해시 일치를 확인했습니다.
 
-The photo above is a 7.3" Waveshare Spectra 6 (E6) e-ink photo frame ([available on AliExpress](https://aliexpress.ru/item/1005010466222338.html)) running the open-source [esp32-photoframe](https://github.com/aitjcize/esp32-photoframe) firmware. Point its *Auto-Rotate URL* at `http://<kilometrika-host>:8000/api/frame.png` and it redraws itself whenever a new workout is imported — the endpoint serves an ETag, so the frame skips refresh cycles (and saves battery) when nothing changed. Calendar counters reset on Mondays and on the 1st automatically.
+**미검증:** 이 독립 빌드에서 실제 운동 상세 화면 전체, 이미지 내보내기, 외부 날씨·지도 요청, 전체 테스트 모음은 실행하지 않았습니다. 위 주요 변경 목록은 구현 범위이며 전 기능 검증 완료를 뜻하지 않습니다. 개인용 HR 구간과 UI 시간대는 수동 소스 설정이며 의존성 완전 고정도 남아 있습니다.
 
-Card labels are in Russian by default; set `FRAME_LANG=en` to render them in English (Week / Month / Year, km).
+개인 DB 없이 수행하는 복구 회귀 테스트: `python -m unittest discover -s tests -p test_common_recovery.py` (앱 의존성 설치 필요). 개인 기록을 참조하던 별도 HR API 테스트는 업로드 사본에 포함하지 않았습니다.
 
-## Home Assistant integration
+원본부터 추적된 `tests/fixtures/`와 `docs/` 이미지는 이력과 함께 그대로 유지합니다. 원본 문서 이미지는 이 포크의 검증 결과가 아닙니다. `.gitignore`는 이미 추적된 파일이나 과거 커밋을 제거하지 않습니다.
 
-Set the `MQTT_*` variables; the service publishes a retained message to `kilometrika/state` after every import **and hourly** (so calendar counters reset on Mondays and the 1st even without new workouts):
-
-```json
-{
-  "run":  {"last_date": "2026-07-09 19:40", "last_km": 10.0, "last_hr_avg": null,
-           "week_km": 10.0, "month_km": 29.7, "year_km": 129.7},
-  "bike": {"last_date": "2026-07-04 08:38", "last_km": 23.0, "last_hr_avg": null,
-           "week_km": 0.0, "month_km": 55.5, "year_km": 538.0},
-  "total_activities": 42,
-  "updated": "2026-07-11T09:00:00+03:00"
-}
-```
-
-Categories and calendar boundaries (local timezone, ISO weeks) match the e-ink frame card. Sensors:
-
-```yaml
-mqtt:
-  sensor:
-    - name: "Run week distance"
-      state_topic: "kilometrika/state"
-      value_template: "{{ value_json.run.week_km }}"
-      unit_of_measurement: "km"
-    - name: "Bike week distance"
-      state_topic: "kilometrika/state"
-      value_template: "{{ value_json.bike.week_km }}"
-      unit_of_measurement: "km"
-    - name: "Last run"
-      state_topic: "kilometrika/state"
-      value_template: "{{ value_json.run.last_km }}"
-      unit_of_measurement: "km"
-```
-
-Ready-made configs live in `ha/`: `mqtt_sensors.yaml` (11 sensors grouped as a Kilometrika device) and `dashboard.yaml` (a sections-layout view: run and bike tiles, the e-ink card image, a 30-day history graph). Entity ids in `dashboard.yaml` are derived from the Russian sensor names — adjust if you rename them.
-
-## Getting full data out of Huawei Health
-
-Huawei Health's per-workout TCX export contains GPS and altitude only. Two ways to get heart rate:
-
-1. **Ongoing:** the Health Sync app can push workouts (with HR) from Huawei Health to Strava; Strava's TCX export is complete. 
-2. **Full history:** request your data at Huawei's privacy portal; the resulting archive contains per-second HR JSON that [huawei-tcx-converter](https://github.com/aricooperdavis/Huawei-TCX-Converter) turns into proper TCX files — drop the batch into the inbox.
-
-## Development
-
-```bash
-pip install -r requirements.txt -r requirements-dev.txt
-pytest tests/
-```
-
-The suite covers the parsers (full Garmin-style TCX, degraded Huawei-style TCX with the haversine fallback, Strava-style GPX with HR/cadence extensions), storage with schema migration of older databases, and the API including upload dedup, notes, photos and the frame ETag.
-
-## Notes
-
-- Chart.js and Leaflet are vendored under `app/static/vendor/` — the dashboard works with no internet access at all, except the map basemap, which is fetched from a public tile CDN (CARTO / OpenStreetMap); the track itself never leaves your server. For a fully offline setup, point the tile URL in `app/static/index.html` at your own TileServer GL instance.
-- SQLite comfortably handles thousands of activities. The `trackpoints` table maps 1:1 onto a TimescaleDB/Grafana setup if you outgrow the built-in charts.
-- Calories are stored when present but treated as informational — every vendor estimates them differently.
-- Sport pictograms on the frame card are official [Material Icons](https://github.com/google/material-design-icons) (`directions_run`, `directions_bike`), Apache License 2.0.
+원본 MIT `LICENSE` 및 vendor의 라이선스 파일·소스 내 저작권 고지를 보존합니다. html2canvas의 고지는 `app/static/vendor/html2canvas-LICENSE.txt`에 있습니다. 원본 운동 아이콘은 Material Icons(Apache License 2.0)입니다. `README.ru.md`는 원본 참고 문서로, 이 포크의 볼륨·기능 설명과 다를 수 있습니다.

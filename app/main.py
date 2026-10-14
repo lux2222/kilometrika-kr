@@ -47,6 +47,7 @@ MQTT_PASS = os.environ.get("MQTT_PASS", "")
 MQTT_PREFIX = os.environ.get("MQTT_PREFIX", "kilometrika")
 
 store: Store | None = None
+recovery_results: dict[int, dict] = {}
 
 
 # ---------------------------------------------------------------- ingestion
@@ -202,12 +203,22 @@ async def lifespan(app: FastAPI):
     for d in (DATA_DIR, INBOX, ARCHIVE, FAILED, PHOTOS):
         d.mkdir(parents=True, exist_ok=True)
     store = Store(str(DATA_DIR / "tcx.db"))
+    from recovery import recover_missing
+    recovery_results.clear()
+    for record in store.list_activities():
+        if record['category'] == 'strength':
+            recovery_results[record['id']] = await asyncio.to_thread(
+                recover_missing, store, record['id'], ARCHIVE)
     task = asyncio.create_task(watch_inbox())
     yield
     task.cancel()
 
 
 app = FastAPI(title="Kilometrika", lifespan=lifespan)
+
+# Read-only original-TCX analysis; independent of ingestion and stored averages.
+from hr_zones_api import create_router as create_hr_zones_router
+app.include_router(create_hr_zones_router(DATA_DIR))
 
 
 @app.post("/api/upload")
@@ -246,6 +257,15 @@ def activity(act_id: int):
     if not act:
         raise HTTPException(404, "not found")
     act["laps"] = json.loads(act.pop("laps_json") or "[]")
+    if act['category'] == 'strength':
+        from recovery import missing
+        act['trackpoints'] = store.get_trackpoints(act_id)
+        act['recovery'] = recovery_results.get(act_id, {'status': 'not_attempted'})
+        act['data_status'] = {key: 'missing' if missing(key, act[key]) else 'available'
+                              for key in ('start_time', 'duration_s', 'calories', 'hr_avg', 'hr_max')}
+        act['data_status']['heart_rate_series'] = 'available' if any(
+            point['time'] and point['hr'] and point['hr'] > 0 for point in act['trackpoints']) else 'missing'
+        act['series_source_hash'] = act['file_hash']
     act["photos"] = [
         {**p, "kind": media_kind(p["filename"])} for p in store.list_photos(act_id)
     ]
@@ -323,13 +343,18 @@ class CategoryBody(BaseModel):
 def set_category(act_id: int, body: CategoryBody):
     """Ручная смена категории — маршрутные GPX (AllTrails) не несут вид
     спорта, да и эвристика по названию может ошибаться."""
-    if body.category not in ("run", "bike", "other"):
-        raise HTTPException(400, "category must be run | bike | other")
+    if body.category not in ("run", "bike", "other", "strength"):
+        raise HTTPException(400, "category must be run | bike | other | strength")
     if not store.get_activity(act_id):
         raise HTTPException(404, "not found")
     store.set_category(act_id, body.category)
+    recovery = None
+    if body.category == 'strength':
+        from recovery import recover_missing
+        recovery = recover_missing(store, act_id, ARCHIVE)
+        recovery_results[act_id] = recovery
     publish_mqtt_state()          # категория влияет на рамку и MQTT-итоги
-    return {"ok": True}
+    return {"ok": True, "category_saved": True, "recovery": recovery}
 
 
 class NotesBody(BaseModel):

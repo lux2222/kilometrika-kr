@@ -1,19 +1,24 @@
 services:
   kilometrika:
-    build: .
-    container_name: kilometrika
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8000}:8000"
     volumes:
-      - ./data:/data          # tcx.db + inbox/archive/failed
+      - kilometrika-data:/data
     environment:
-      WATCH_INTERVAL: "30"    # сек, период сканирования /data/inbox
-      TZ: "Europe/Amsterdam"  # локальный пояс для дат на дашборде и рамке
-      # FRAME_LANG: "en"      # язык карточки рамки: ru (по умолчанию) | en
-      # --- опционально: публикация в MQTT для Home Assistant ---
-      # MQTT_HOST: "192.168.1.x"
-      # MQTT_PORT: "1883"
-      # MQTT_USER: "mqtt"
-      # MQTT_PASS: "secret"
-      # MQTT_PREFIX: "kilometrika"
+      DATA_DIR: /data
+      WATCH_INTERVAL: "${WATCH_INTERVAL:-30}"
+      TZ: "${TZ:-UTC}"
+      FRAME_LANG: "${FRAME_LANG:-en}"
+      MQTT_HOST: "${MQTT_HOST:-}"
+      MQTT_PORT: "${MQTT_PORT:-1883}"
+      MQTT_USER: "${MQTT_USER:-}"
+      MQTT_PASS: "${MQTT_PASS:-}"
+      MQTT_PREFIX: "${MQTT_PREFIX:-kilometrika}"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+volumes:
+  kilometrika-data:
