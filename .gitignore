@@ -1,9 +1,62 @@
-# runtime data — never commit workouts or the database
+# Runtime and personal data. Existing upstream history is retained.
 data/
+inbox/
+archive/
+failed/
+photos/
+uploads/
+captures/
+screenshots/
+backups/
+backup/
+logs/
+artifacts/
+audit/
 *.db
-*.tcx
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.[tT][cC][xX]
+*.[gG][pP][xX]
+*.fit
+*.log
+*.bak
+*.backup
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+
+# Personal imagery is excluded by default; retain application/upstream assets.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.mp4
+!app/assets/**
+!app/static/vendor/**
+!docs/dashboard.png
+!docs/frame-photo.jpg
+!tests/fixtures/*.tcx
+!tests/fixtures/*.gpx
+
+# Secrets: examples must contain placeholders only.
+.env
+.env.*
+!.env.example
+secrets/
+credentials/
+*.pem
+*.key
 
 __pycache__/
-*.pyc
+*.py[cod]
 venv/
-.env
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.DS_Store

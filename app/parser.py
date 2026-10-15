@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import hashlib
+import math
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -97,9 +99,14 @@ def _fill_missing_from_gps(tps: list[Trackpoint]) -> None:
     cum = 0.0
     prev = None
     for tp in tps:
+        if not (isinstance(tp.lat, (int, float)) and isinstance(tp.lon, (int, float))
+                and math.isfinite(tp.lat) and math.isfinite(tp.lon)
+                and abs(tp.lat) <= 90 and abs(tp.lon) <= 180):
+            prev = None
+            continue
         if prev is not None and None not in (tp.lat, tp.lon, prev.lat, prev.lon):
             step = _haversine_m(prev.lat, prev.lon, tp.lat, tp.lon)
-            dt = (tp.time - prev.time).total_seconds()
+            dt = (tp.time - prev.time).total_seconds() if tp.time and prev.time else 0
             # ignore GPS jitter jumps (>30 m/s is not a human on foot/bike)
             if dt > 0 and step / dt < 30:
                 cum += step
@@ -113,7 +120,41 @@ def parse_tcx(path: str) -> Activity:
     with open(path, "rb") as f:
         file_hash = hashlib.sha256(f.read()).hexdigest()[:16]
 
-    data = TCXReader().read(path)
+    data = TCXReader().read(path, only_gps=False)
+    indoor_summary = sport_category(data.activity_type) == 'other' or not any(
+        t.latitude is not None and t.longitude is not None
+        and math.isfinite(t.latitude) and math.isfinite(t.longitude)
+        and abs(t.latitude) <= 90 and abs(t.longitude) <= 180
+        for t in data.trackpoints)
+    # Indoor/Other summaries must not depend on the presence of GPS.
+    # Keep the established bicycle timing contract unchanged.
+    if indoor_summary:
+        root = ET.parse(path).getroot()
+        ns = {'t': 'http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2'}
+        raw_laps = root.findall('.//t:Activity/t:Lap', ns)
+        durations = []
+        for raw, lap in zip(raw_laps, data.laps):
+            text = raw.findtext('t:TotalTimeSeconds', namespaces=ns)
+            try:
+                value = float(text) if text is not None else None
+            except (TypeError, ValueError):
+                value = None
+            if value is not None and math.isfinite(value) and value >= 0:
+                lap.duration = value
+                durations.append(value)
+            stamp = raw.get('StartTime')
+            if stamp:
+                try:
+                    lap.start_time = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+                except ValueError:
+                    pass
+        if raw_laps and len(durations) == len(raw_laps):
+            data.duration = sum(durations)
+        else:
+            times = [stamp for t in data.trackpoints if (stamp := _as_utc(t.time)) is not None]
+            data.duration = (max(times)-min(times)).total_seconds() if len(times) > 1 else 0.0
+        if data.laps and data.laps[0].start_time:
+            data.start_time = data.laps[0].start_time
 
     laps = []
     for lap in getattr(data, "laps", []) or []:
@@ -142,6 +183,61 @@ def parse_tcx(path: str) -> Activity:
         ))
 
     _fill_missing_from_gps(tps)
+
+    if indoor_summary:
+        def weighted_hr(points):
+            weighted = seconds = 0.0
+            for a, b in zip(points, points[1:]):
+                if a.time is None or b.time is None:
+                    continue
+                dt = (_as_utc(b.time) - _as_utc(a.time)).total_seconds()
+                if (0 < dt <= 15 and a.hr is not None and b.hr is not None
+                        and math.isfinite(a.hr) and math.isfinite(b.hr)
+                        and a.hr > 0 and b.hr > 0):
+                    weighted += a.hr * dt
+                    seconds += dt
+            return weighted / seconds if seconds else None
+        data.hr_avg = weighted_hr(tps)
+        for summary, lap in zip(laps, data.laps):
+            points = [Trackpoint(t.time, None, None, None, None, t.hr_value, None, None, None)
+                      for t in lap.trackpoints]
+            summary['hr_avg'] = weighted_hr(points)
+
+        # GPS-independent raw Lap summaries also cover summary-only TCX exports.
+        def raw_number(lap, tag):
+            try:
+                value = float(lap.findtext(tag, namespaces=ns))
+                return value if math.isfinite(value) and value >= 0 else None
+            except (TypeError, ValueError):
+                return None
+        raw_durations = [raw_number(lap, 't:TotalTimeSeconds') for lap in raw_laps]
+        if raw_durations and all(v is not None for v in raw_durations):
+            data.duration = sum(raw_durations)
+        if not laps:
+            laps = [{'start_time': lap.get('StartTime'),
+                     'duration_s': raw_number(lap, 't:TotalTimeSeconds'),
+                     'distance_m': raw_number(lap, 't:DistanceMeters'),
+                     'calories': raw_number(lap, 't:Calories'),
+                     'hr_avg': raw_number(lap, 't:AverageHeartRateBpm/t:Value'),
+                     'hr_max': raw_number(lap, 't:MaximumHeartRateBpm/t:Value')}
+                    for lap in raw_laps]
+        calories = [raw_number(lap, 't:Calories') for lap in raw_laps]
+        if calories and all(v is not None for v in calories):
+            data.calories = sum(calories)
+        averages = [(raw_number(lap, 't:AverageHeartRateBpm/t:Value'),
+                     raw_number(lap, 't:TotalTimeSeconds')) for lap in raw_laps]
+        if data.hr_avg is None and averages and all(h is not None and 0 < h <= 255 and d is not None and d > 0 for h, d in averages):
+            data.hr_avg = sum(h*d for h,d in averages) / sum(d for _,d in averages)
+        maxima = [raw_number(lap, 't:MaximumHeartRateBpm/t:Value') for lap in raw_laps]
+        maxima = [h for h in maxima if h is not None and 0 < h <= 255]
+        if data.hr_max is None and maxima:
+            data.hr_max = max(maxima)
+        if data.start_time is None:
+            stamp = root.findtext('.//t:Activity/t:Id', namespaces=ns)
+            try:
+                data.start_time = datetime.fromisoformat(stamp.replace('Z', '+00:00'))
+            except (ValueError, AttributeError):
+                pass
 
     return Activity(
         file_hash=file_hash,

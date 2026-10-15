@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Километрика</title>
+<title>Kilometrika · 운동 기록</title>
 <script src="/static/vendor/chart.umd.min.js"></script>
 <link rel="stylesheet" href="/static/vendor/leaflet.min.css">
 <script src="/static/vendor/leaflet.min.js"></script>
@@ -30,12 +30,25 @@
   }
   h1 { font-size: 20px; font-weight: 600; letter-spacing: .04em; }
   h1 span { color: var(--accent); }
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap:wrap; gap:8px 16px; }
+
   .mono { font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace; }
-  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; }
+  .grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; }
+  .grid > div, .panel { min-width: 0; }
+  .panel > div[style*="display:flex"] { flex-wrap: wrap; gap: 10px; }
+  .seg { flex-shrink: 0; }
+  .seg button, button.del { min-height: 36px; white-space: nowrap; }
+  .act > div { min-width: 0; overflow-wrap: anywhere; }
+  .act .dist { flex-shrink: 0; white-space: nowrap; }
+  @media (max-width: 480px) {
+    body { padding: 12px; }
+    .grid .panel { padding: 12px; }
+    #detailTitle { line-height: 1.7; }
+    .stats .stat b { font-size: 18px; overflow-wrap: anywhere; }
+  }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
-  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin-bottom: 12px; }
+  .panel h2 { font-size: 12px; text-transform: none; letter-spacing: .12em; color: var(--dim); margin-bottom: 12px; }
 
   #drop {
     border: 1.5px dashed var(--line); border-radius: 8px; padding: 14px;
@@ -45,12 +58,12 @@
   #drop.hover, #drop:hover { border-color: var(--accent); color: var(--accent); }
 
   .split {
-    display: grid; grid-template-columns: 40px 54px 1fr 60px;
+    display: grid; grid-template-columns: 32px 62px minmax(0, 1fr) 66px;
     gap: 10px; align-items: center; padding: 3px 0; font-size: 13px;
   }
   .split .bar { height: 12px; border-radius: 6px; background: var(--sport-c, var(--accent)); }
   .split .elev { color: var(--dim); text-align: right; }
-  .split.head { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  .split.head { color: var(--dim); font-size: 11px; text-transform: none; letter-spacing: .08em; }
   .yhead {
     display: flex; align-items: center; gap: 8px; padding: 8px;
     cursor: pointer; user-select: none;
@@ -78,11 +91,11 @@
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 16px; }
   .stat { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
   .stat b { display: block; font-size: 20px; font-weight: 600; }
-  .stat span { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+  .stat span { font-size: 11px; color: var(--dim); text-transform: none; letter-spacing: .08em; }
   .stat.hr b { color: var(--hr); } .stat.spd b { color: var(--speed); } .stat.dst b { color: var(--accent); }
 
-  canvas { max-height: 320px; }
-  #weeklyChart { max-height: 180px; }
+  canvas { max-height: 320px; max-width: 100%; }
+
   .muted { color: var(--dim); }
   .uprog { font-size: 13px; color: var(--text); margin: 10px 0 4px; }
   .uprog.err { color: var(--hr); white-space: normal; word-break: break-word; }
@@ -107,19 +120,22 @@
     border: 1px solid var(--line); background: var(--bg);
   }
   .leaflet-container { font: inherit; }
-  /* тайлы OSM светлые — затемняем под тему */
-  #map .leaflet-tile-pane {
-    filter: invert(1) hue-rotate(180deg) brightness(.95) contrast(.9) saturate(.6);
-  }
+  /* Map study C: filter only raster tiles, not routes, markers or credits. */
+  #map .leaflet-tile-pane { filter: saturate(0.05) brightness(1.14) contrast(0.82); }
+  #map .study-pin { display:block; width:24px; height:24px; padding:0; border:0; background:transparent; border-radius:0; box-shadow:none; line-height:0; font-size:0; box-sizing:border-box; }
+  #map .study-pin svg { display:block; width:24px; height:24px; margin:0; padding:0; border:0; box-sizing:border-box; pointer-events:none; }
+  #map .study-label { padding:4px 6px; line-height:18px; white-space:nowrap; }
+  #map .leaflet-tooltip { color:#18251d; font-weight:600; }
+  @media (max-width: 800px) { #map { height: 360px; } }
   .leaflet-control-attribution {
-    background: rgba(16,20,24,.55) !important;
-    color: #5a6672 !important;
-    font-size: 9px !important;
+    background: rgba(255,255,255,.95) !important;
+    color: #263238 !important;
+    font-size: 11px !important;
     padding: 1px 5px !important;
   }
-  .leaflet-control-attribution a { color: #5a6672 !important; }
+  .leaflet-control-attribution a { color: #075985 !important; }
   .sect { margin-top: 18px; }
-  .sect h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin-bottom: 8px; }
+  .sect h2 { font-size: 12px; text-transform: none; letter-spacing: .12em; color: var(--dim); margin-bottom: 8px; }
   #notes {
     width: 100%; background: var(--bg); color: var(--text);
     border: 1px solid var(--line); border-radius: 6px; padding: 10px;
@@ -147,75 +163,145 @@
     padding: 8px 14px; color: var(--dim); cursor: pointer; font-size: 13px;
   }
   .photoAdd:hover { border-color: var(--accent); color: var(--accent); }
+  /* Detail A: scoped reference tokens; list and aggregate theme is unchanged. */
+  #detail.da-phone { --bg:#f5f7f8; --text:#141b23; --dim:#78828d; --line:#e5eaf0; max-width:440px; margin:0 auto; padding:0; background:#fff; color:#141b23; border:0; border-radius:26px; overflow:hidden; box-shadow:0 22px 70px #1b334720; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif; font-synthesis:none; }
+  #detail .da-head {padding:25px 24px 19px;}
+  #detail .da-tag {font-size:11px;font-weight:800;letter-spacing:.12em;color:#1aa78a;}
+  #detail .da-header-row {display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:12px;}
+  #detail #detailTitle {font-size:27px;letter-spacing:-.055em;margin:0;font-weight:780;color:#141b23;line-height:1.25;}
+  #detail .da-date {font-size:12px;color:#78828d;margin-top:7px;}
+  #detail .da-share {width:39px;height:39px;flex:none;display:grid;place-items:center;border-radius:12px;border:1px solid #e5eaf0;background:white;color:#87919b;font-size:20px;cursor:not-allowed;}
+  #detail .da-map-wrap {margin:0 16px 20px;border-radius:18px;overflow:hidden;background:#f1f3f3;position:relative;}
+  #detail #map {height:310px;border:0;border-radius:0;margin:0;background:#f1f3f3;}
+
+  #detail .da-main {padding:0 22px 28px;}
+  #detail .da-section-label {display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 0 14px;font-size:17px;font-weight:760;letter-spacing:-.04em;}
+  #detail .da-small-note {color:#87919b;font-size:10px;font-weight:500;}
+  #detail .da-primary-grid {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding-bottom:22px;}
+  #detail .da-metric {background:#f5f7f8;border-radius:15px;padding:17px 15px 16px;min-height:103px;overflow-wrap:anywhere;}
+  #detail .da-key {font-size:12px;color:#78818b;margin-bottom:9px;display:flex;align-items:center;gap:7px;}
+  #detail .da-key svg {width:20px;height:20px;flex:0 0 20px;}
+  #detail .da-value {font-size:26px;line-height:1.2;font-weight:780;letter-spacing:-.045em;font-variant-numeric:tabular-nums;}
+  #detail .da-unit {font-size:13px;color:#74808a;font-weight:600;}
+  #detail .da-source {font-size:10px;color:#78828d;margin-top:7px;}
+  #detail .da-unavailable {font-size:18px;}
+  #detail .da-hr-banner {background:#fff5f5;padding:15px 17px;border-radius:14px;margin-bottom:12px;display:flex;justify-content:space-between;gap:8px;}
+  #detail .da-hr-banner small {display:block;font-size:11px;color:#9a6d72;margin-bottom:7px;}
+  #detail .da-hr-banner strong {font-size:24px;color:#bf4753;letter-spacing:-.05em;}
+  #detail .da-hr-banner i {font-size:12px;font-style:normal;color:#a7767c;}
+  #detail .da-rule {height:1px;background:#e9edf0;margin:7px 0 24px;}
+  #detail .da-chart-box {border-radius:15px;background:#fafbfd;padding:14px 10px 9px;margin-bottom:10px;}
+  #detail .da-chart-box svg {display:block;width:100%;height:auto;min-height:157px;font-family:inherit;}
+  #detail .da-legend {display:flex;justify-content:space-between;color:#78828d;font-size:10px;padding:2px 7px 6px;}
+  #detail .da-graph-note {font-size:11px;color:#78828d;line-height:1.5;margin:4px 0 23px;}
+  #detail .da-alt-band {display:flex;justify-content:space-between;padding:2px 0 12px;}
+  #detail .da-alt-band span {font-size:11px;color:#87919b;display:block;margin-bottom:5px;}
+  #detail .da-alt-band b {font-size:20px;letter-spacing:-.035em;}
+
+  #activityTools {max-width:440px;margin:18px auto 0;font-size:12px;}
+  #activityTools summary {cursor:pointer;color:#78828d;}
+  #activityTools .da-management {display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  #detail .da-empty {font-size:12px;color:#78828d;padding:24px 10px;}
+  @media(max-width:800px){#detail #map {height:360px;}}
+  @media(max-width:480px){#detail.da-phone {max-width:none;border-radius:0;box-shadow:none;}}
+  #detail .da-date {display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px;}
+  #activityWeather {display:inline-flex;align-items:center;gap:4px;position:relative;font-size:inherit;line-height:inherit;cursor:help;flex-shrink:0;}
+  #activityWeather[hidden] {display:none;}
+  #activityWeather .weather-help {display:none;position:absolute;top:100%;right:0;z-index:1001;width:230px;padding:8px;background:white;border:1px solid #e5eaf0;border-radius:6px;color:#52606d;box-shadow:0 2px 8px #0002;}
+  #activityWeather:hover .weather-help,#activityWeather:focus-within .weather-help {display:block;}
+  #activityWeather .weather-help a {color:#075985;}
+  /* List-only readability: never inherit these overrides into detail. */
+  #activityListPanel { --dim:#a8b4c0; }
+  #activityListPanel, #activityListPanel * {
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;
+    letter-spacing:normal; line-height:1.4; font-variant-numeric:tabular-nums;
+  }
+  #activityListPanel .act .date { font-size:14px; font-weight:600; }
+  #activityListPanel .act .sport { font-size:13px; margin-top:3px; }
+  #activityListPanel .act > div:first-child { flex:1; min-width:0; }
+  #activityListPanel .act .dist { flex:0 0 auto; align-self:center; }
+  #activityListPanel .yhead { flex-wrap:wrap; }
+  #activityListPanel .ysum { text-align:right; overflow-wrap:anywhere; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Кило<span>метрика</span></h1>
-  <div class="muted mono" id="counter"></div>
+  <h1>Kilo<span>metrika</span></h1>
+
 </header>
 
 <div class="grid">
   <div>
-    <div id="drop">Перетащи .tcx / .gpx сюда или кликни для выбора
+    <div id="drop">.tcx / .gpx 파일을 놓거나 눌러서 선택하세요
       <input type="file" id="fileInput" accept=".tcx,.gpx" multiple hidden>
     </div>
     <div id="dropProg" class="uprog" hidden><span class="t"></span><div class="bar"><i></i></div></div>
-    <div class="panel">
-      <h2>Тренировки</h2>
-      <div id="list" class="mono" style="font-size:13px"></div>
+    <div class="panel" id="activityListPanel">
+      <h2>운동 기록</h2>
+      <div id="list" style="font-size:13px"></div>
     </div>
   </div>
 
   <div>
-    <div class="panel" style="margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h2 style="margin:0" id="aggTitle">Километраж по неделям</h2>
-        <div class="seg">
-          <button data-p="week" class="on">Недели</button><button data-p="month">Месяцы</button><button data-p="year">Годы</button>
-        </div>
+
+    <div class="panel da-phone" id="detail" hidden>
+      <div class="da-head">
+        <div class="da-tag">ACTIVITY DETAIL</div>
+        <div class="da-header-row"><div><h2 id="detailTitle"></h2><p class="da-date"><span id="detailDate"></span><span id="activityWeather" tabindex="0" hidden></span></p></div>
+        <button id="shareDisabled" class="da-share" type="button" style="cursor:pointer" aria-label="이미지 저장" title="현재 운동 상세 카드 전체를 2배 해상도 PNG 이미지로 저장">↗</button></div>
       </div>
-      <canvas id="weeklyChart"></canvas>
+      <section class="da-map-wrap" aria-label="GPS 경로">
+        <div id="map" hidden></div><p id="mapEmpty" class="da-empty" hidden>표시할 GPS 경로가 없습니다.</p>
+
+      </section>
+      <div class="da-main">
+      <div class="da-section-label">활동 요약</div>
+      <div class="da-primary-grid" id="stats"></div>
+      <div class="da-rule"></div>
+      <section aria-label="속도 변화">
+        <div class="da-section-label">속도 변화</div>
+        <div class="da-chart-box" id="speedGraph"></div>
+
+        <p class="da-graph-note" id="speedNote"></p>
+      </section>
+      <div class="da-section-label">심박수 변화 <span style="color:#db5963;font-size:19px">♡</span></div>
+      <div class="da-hr-banner"><div><small>평균 심박수</small><strong id="hrAverage">—</strong></div><div><small>최고 심박수</small><strong id="hrMaximum">—</strong></div></div>
+      <div class="da-chart-box" id="hrGraph"></div>
+      <p class="da-small-note" id="strengthDataStatus" hidden></p>
+      <section id="hrZones" aria-label="심박수 구간 분포" hidden>
+        <div class="da-section-label">심박수 구간 분포</div>
+        <div class="da-metric"><p class="da-small-note">최대 심박수 설정 후 표시됩니다</p></div>
+      </section>
+      </div>
     </div>
-    <div class="panel" id="detail" hidden>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px">
-        <h2 id="detailTitle" style="margin:0"></h2>
-        <div style="display:flex;gap:10px;align-items:center">
-          <div class="seg" id="catSeg" title="категория тренировки">
-            <button data-c="run">Бег</button><button data-c="bike">Вел</button><button data-c="other">Прочее</button>
-          </div>
-          <button class="del" id="delBtn">удалить</button>
-        </div>
-      </div>
-      <div class="stats" id="stats"></div>
-      <div id="map" hidden></div>
-      <canvas id="actChart"></canvas>
+      <details class="da-tools" id="activityTools" hidden><summary>운동 관리 · 기존 기능</summary>
+        <div class="da-management"><div class="seg" id="catSeg" title="운동 유형 변경"><button data-c="run">달리기</button><button data-c="bike">자전거</button><button data-c="other">기타</button><button data-c="strength">근력운동</button></div><button class="del" id="delBtn">삭제</button></div>
       <div class="sect" id="splitsSect" hidden>
-        <h2>По километрам</h2>
+        <h2>킬로미터별 구간 · API 계산값</h2>
         <div id="splits" class="mono"></div>
       </div>
       <div class="sect">
-        <h2>Впечатления</h2>
-        <textarea id="notes" rows="3" placeholder="Как прошла тренировка?"></textarea>
+        <h2>운동 메모</h2>
+        <textarea id="notes" rows="3" placeholder="오늘 운동은 어땠나요?"></textarea>
         <div class="notesrow"><span id="notesStatus" class="muted"></span>
-          <button class="del" id="notesSave">сохранить</button></div>
+          <button class="del" id="notesSave">저장</button></div>
       </div>
       <div class="sect">
-        <h2>Фото и видео</h2>
+        <h2>사진과 동영상</h2>
         <div id="photoGrid"></div>
-        <label class="photoAdd">+ добавить фото или видео
+        <label class="photoAdd">+ 사진 또는 동영상 추가
           <input type="file" id="photoInput" accept="image/*,video/*" multiple hidden>
         </label>
         <div id="photoProg" class="uprog" hidden><span class="t"></span><div class="bar"><i></i></div></div>
       </div>
-    </div>
-    <div class="panel muted" id="placeholder">Выбери тренировку слева — покажу пульс, скорость и рельеф.</div>
+      </details>
+    <div class="panel muted" id="placeholder">운동 기록을 선택하면 심박, 속도, 고도를 볼 수 있습니다. 시간은 Asia/Seoul 기준입니다.</div>
   </div>
 </div>
 
 <script>
 const $ = s => document.querySelector(s);
-let selectedId = null, weeklyChart = null, actChart = null;
+let selectedId = null, actChart = null;
 
 // экранирование для innerHTML: sport приходит из загруженного файла
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
@@ -227,69 +313,101 @@ async function send(url, opts) {
   try {
     const r = await fetch(url, opts);
     if (r.ok) return true;
-    alert(`Не удалось: HTTP ${r.status}`);
+    alert(`요청 실패: HTTP ${r.status}`);
   } catch {
-    alert("Не удалось: нет связи с сервером");
+    alert("요청 실패: 서버에 연결할 수 없습니다.");
   }
   return false;
 }
 
 const fmtDur = s => {
-  s = s || 0;
+  if (s == null || !Number.isFinite(s) || s < 0) return "—";
   const h = Math.floor(s/3600), m = Math.floor(s%3600/60);
-  return h ? `${h}ч ${m}м` : `${m}м ${Math.floor(s%60)}с`;
+  return h ? `${h}시간 ${m}분` : `${m}분 ${Math.floor(s%60)}초`;
 };
 
 // Категория спорта по названию — Huawei/Garmin пишут кто во что горазд
 // ("Бег на улице", "Running", "Biking", "Езда на велосипеде"...)
-const CAT_COLORS = { run: "#7ee08a", bike: "#58a6ff", other: "#c9a15a" };
+const CAT_COLORS = { run: "#7ee08a", bike: "#58a6ff", other: "#c9a15a", strength: "#c9a15a" };
 // категорию считает сервер при импорте; эвристика — фолбэк для старых записей
 const sportCat = a => a.category ||
   (/бег|run|jog/i.test(a.sport||"") ? "run" : /вел|bik|cycl|ride/i.test(a.sport||"") ? "bike" : "other");
 const catColor = a => CAT_COLORS[sportCat(a)] || CAT_COLORS.other;
 const asUTC = iso => /Z$|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + "Z";
-const fmtDate = iso => iso ? new Date(asUTC(iso)).toLocaleString("ru-RU",
-  {day:"2-digit", month:"2-digit", year:"2-digit", hour:"2-digit", minute:"2-digit"}) : "—";
+const seoulParts = iso => Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+  timeZone:"Asia/Seoul", year:"numeric", month:"2-digit", day:"2-digit"
+}).formatToParts(new Date(asUTC(iso))).map(p => [p.type, p.value]));
+const fmtDate = iso => iso ? new Date(asUTC(iso)).toLocaleString("ko-KR",
+  {timeZone:"Asia/Seoul", day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit", hourCycle:"h23"}) : "—";
+const sportLabel = a => ({run:"달리기", bike:"자전거", other:"기타", strength:"근력운동"}[sportCat(a)] || "기타");
+// API exposes distance and duration, not a measured average speed. Display-only conversion.
+const averageSpeed = a => Number.isFinite(a.distance_m) && a.distance_m >= 0 && Number.isFinite(a.duration_s) && a.duration_s > 0
+  ? (a.distance_m / a.duration_s * 3.6).toFixed(2) : "—";
 const pace = (dur, dist) => {
-  if (!dist || !dur) return "—";
-  const spk = dur / (dist/1000), m = Math.floor(spk/60), s = Math.round(spk%60);
-  return `${m}:${String(s).padStart(2,"0")} /км`;
+  if (!Number.isFinite(dist) || !Number.isFinite(dur) || dist <= 0 || dur <= 0) return "—";
+  const spk = Math.round(dur / (dist/1000)), m = Math.floor(spk/60), s = spk%60;
+  return `${m}:${String(s).padStart(2,"0")} min/km`;
 };
 
 // свёрнутость годов в списке; для годов без записи — развёрнут только текущий
 const YEARS_KEY = "kmYearsOpen";
 const yearsOpen = JSON.parse(localStorage.getItem(YEARS_KEY) || "{}");
 
-// общий кэш: одним запросом и для списка, и для графика
+function uniqueActivities(records) {
+  const seen = new Set();
+  return records.filter(a => {
+    if (a.id == null) return true;
+    const key = String(a.id);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function activityTotals(records) {
+  let distance = null, calories = null;
+  for (const a of uniqueActivities(records)) {
+    if (["run", "bike"].includes(sportCat(a)) && Number.isFinite(a.distance_m) && a.distance_m >= 0)
+      distance = (distance ?? 0) + a.distance_m;
+    if (Number.isFinite(a.calories) && a.calories >= 0)
+      calories = (calories ?? 0) + a.calories;
+  }
+  return {distance: distance === null ? "—" : (distance / 1000).toFixed(1) + " km",
+    calories: calories === null ? "—" : Math.round(calories) + " kcal"};
+}
+function listMetric(a) {
+  if (sportCat(a) === "strength")
+    return Number.isFinite(a.calories) && a.calories >= 0 ? Math.round(a.calories) + " kcal" : "";
+  return Number.isFinite(a.distance_m) && a.distance_m > 0 ? (a.distance_m / 1000).toFixed(1) + " km" : "";
+}
+function listDuration(a) {
+  // The list API has no bicycle moving time; label its stored total explicitly.
+  // Strength uses the same positive stored duration as the detail card.
+  if (!Number.isFinite(a.duration_s) || a.duration_s <= 0) return '';
+  return ` · ${sportCat(a) === 'bike' ? '전체 ' : ''}${detailTime(a.duration_s)}`;
+}
 let allActs = [];
 async function reload() {
-  allActs = await (await fetch("/api/activities")).json();
-  loadList(); loadWeekly();
+  allActs = uniqueActivities(await (await fetch("/api/activities")).json());
+  loadList();
 }
-
 function loadList() {
   const acts = allActs;
-  $("#counter").textContent = acts.length + " активностей";
   const list = $("#list");
-  list.innerHTML = acts.length ? "" : '<div class="muted">Пока пусто</div>';
+  list.innerHTML = acts.length ? "" : '<div class="muted">아직 운동 기록이 없습니다</div>';
   const groups = new Map();          // acts отсортированы по дате DESC — годы тоже
   for (const a of acts) {
-    const y = a.start_time ? new Date(asUTC(a.start_time)).getFullYear() : "без даты";
+    const y = a.start_time ? Number(seoulParts(a.start_time).year) : "날짜 없음";
     if (!groups.has(y)) groups.set(y, []);
     groups.get(y).push(a);
   }
-  const nowY = new Date().getFullYear();
+  const nowY = Number(seoulParts(new Date().toISOString()).year);
   for (const [y, items] of groups) {
     const open = yearsOpen[y] ?? (y === nowY);
-    const kmBy = { run: 0, bike: 0, other: 0 };
-    for (const a of items) kmBy[sportCat(a)] += (a.distance_m || 0) / 1000;
-    const parts = ["run", "bike", "other"]
-      .filter(c => kmBy[c] >= 0.05)
-      .map(c => `<span style="color:${CAT_COLORS[c]}">${kmBy[c].toFixed(0)}</span>`);
+    const totals = activityTotals(items);
     const head = document.createElement("div");
     head.className = "yhead";
     head.innerHTML = `<span class="chev">${open ? "▾" : "▸"}</span><b>${y}</b>
-      <span class="ysum">${items.length} трен. · ${parts.join(" · ") || 0} км</span>`;
+      <span class="ysum">${items.length}개 · ${totals.distance} · ${totals.calories}</span>`;
     const body = document.createElement("div");
     body.className = "ybody";
     body.hidden = !open;
@@ -304,8 +422,8 @@ function loadList() {
       el.className = "act" + (a.id === selectedId ? " sel" : "");
       el.dataset.id = a.id;
       el.style.setProperty("--sport-c", catColor(a));
-      el.innerHTML = `<div>${fmtDate(a.start_time)}<div class="sport">${esc(a.sport)}</div></div>
-                      <div class="dist">${((a.distance_m||0)/1000).toFixed(1)} км</div>`;
+      el.innerHTML = `<div><div class="date">${fmtDate(a.start_time)}</div><div class="sport" title="원본 운동 유형: ${esc(a.sport)}">${sportLabel(a)}${listDuration(a)}</div></div>
+                      ${listMetric(a) ? `<div class="dist">${listMetric(a)}</div>` : ''}`;
       el.onclick = () => showActivity(a.id);
       body.appendChild(el);
     }
@@ -314,145 +432,511 @@ function loadList() {
   }
 }
 
-let aggPeriod = "week";
-const AGG = {
-  week:  { title: "Километраж по неделям", last: 12 },
-  month: { title: "Километраж по месяцам", last: 12 },
-  year:  { title: "Километраж по годам",   last: 10 },
-};
-
-function periodKey(dateStr, period) {
-  const d = new Date(asUTC(dateStr));   // как в fmtDate: naive-строки — это UTC
-  if (period === "year")  return String(d.getFullYear());
-  if (period === "month") return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-  // ISO week
-  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
-  const w = Math.ceil((((t - new Date(Date.UTC(t.getUTCFullYear(),0,1))) / 864e5) + 1) / 7);
-  return `${t.getUTCFullYear()}-W${String(w).padStart(2,"0")}`;
-}
-
-function loadWeekly() {
-  const acts = allActs;
-  const byKey = {};
-  for (const a of acts) {
-    if (!a.start_time) continue;
-    const k = periodKey(a.start_time, aggPeriod);
-    (byKey[k] ??= { run: 0, bike: 0, other: 0 })[sportCat(a)] += (a.distance_m || 0) / 1000;
-  }
-  const keys = Object.keys(byKey).sort().slice(-AGG[aggPeriod].last);
-  $("#aggTitle").textContent = AGG[aggPeriod].title;
-  const ds = (key, label, color) => ({
-    label, data: keys.map(k => +byKey[k][key].toFixed(1)),
-    backgroundColor: color + "88", borderColor: color, borderWidth: 1,
-  });
-  weeklyChart?.destroy();
-  weeklyChart = new Chart($("#weeklyChart"), {
-    type: "bar",
-    data: { labels: keys, datasets: [
-      ds("run",   "Бег",       "#7ee08a"),
-      ds("bike",  "Велосипед", "#58a6ff"),
-      ds("other", "Прочее",    "#c9a15a"),
-    ]},
-    options: { plugins: { legend: { labels: { color: "#d7dee6", boxWidth: 12 } } },
-      scales: { x: { stacked: true, ticks: { color: "#7d8b99" }, grid: { color: "#242d37" } },
-                y: { stacked: true, ticks: { color: "#7d8b99" }, grid: { color: "#242d37" },
-                     title: { display: true, text: "км", color: "#7d8b99" } } } }
-  });
-}
-
-document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
-  document.querySelectorAll(".seg button").forEach(x => x.classList.remove("on"));
-  b.classList.add("on");
-  aggPeriod = b.dataset.p;
-  loadWeekly();
-});
 
 let map = null, trackLayer = null;
 
-function drawTrack(tps, color) {
-  const pts = tps.filter(t => t.lat != null && t.lon != null)
-                 .map(t => [t.lat, t.lon]);
+/* SPEED_MODEL_START */
+function speedStamp(p) {
+  return typeof p.time === 'string' && p.time ? Date.parse(/Z$|[+-]\d\d:?\d\d$/.test(p.time) ? p.time : p.time+'Z') : NaN;
+}
+function speedGPS(p) {
+  return Number.isFinite(p.lat) && Math.abs(p.lat)<=90 && Number.isFinite(p.lon) && Math.abs(p.lon)<=180;
+}
+function speedDistance(a,b) {
+  const r=Math.PI/180, dlat=(b.lat-a.lat)*r, dlon=(b.lon-a.lon)*r;
+  const h=Math.sin(dlat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dlon/2)**2;
+  return 6371000*2*Math.asin(Math.sqrt(Math.min(1,Math.max(0,h))));
+}
+function buildSpeedModel(tps) {
+  const stored=tps.some(p=>Number.isFinite(p.speed) && p.speed>=0);
+  const stamps=tps.map(speedStamp), origin=stamps.find(Number.isFinite);
+  const edges=[], values=[];
+  let maxT=0, latest=origin;
+  for(let i=1;i<tps.length;i++) {
+    const a=tps[i-1], b=tps[i], dt=(stamps[i]-stamps[i-1])/1000;
+    const forward=stamps[i-1]>=latest;
+    if(Number.isFinite(stamps[i])) latest=Math.max(latest,stamps[i]);
+    if(Number.isFinite(stamps[i]) && Number.isFinite(origin)) maxT=Math.max(maxT,(stamps[i]-origin)/1000);
+    // Preserve the existing 15-second discontinuity limit. Never bridge missing points.
+    if(!forward || !speedGPS(a) || !speedGPS(b) || !Number.isFinite(dt) || dt<=0 || dt>15 || stamps[i-1]<origin) continue;
+    const mps=speedDistance(a,b)/dt;
+    // Same conservative GPS jump ceiling as the existing parser; do not alter stored data.
+    if(mps>=30) continue;
+    const speed=stored ? (Number.isFinite(b.speed) && b.speed>=0 ? b.speed*3.6 : null) : mps*3.6;
+    edges.push({sourceIndex:i,points:[[a.lat,a.lon],[b.lat,b.lon]],x0:(stamps[i-1]-origin)/1000,x1:(stamps[i]-origin)/1000,speed});
+    if(speed!==null) values.push(speed);
+  }
+  const lo=values.length?values.reduce((a,b)=>Math.min(a,b),Infinity):null;
+  const hi=values.length?values.reduce((a,b)=>Math.max(a,b),-Infinity):null;
+  return {edges,values,lo,hi,maxT,source:stored?'저장된 시계열 속도 (GPS 추정값 포함 가능)':'GPS 기반 추정'};
+}
+function speedColor(value, model) {
+  if(!Number.isFinite(value)) return '#9ca3af';
+  if(model.fixedBikeScale) {
+    const stops=[[0,[37,99,235]],[5,[20,184,166]],[10,[22,163,106]],[20,[242,140,40]],[30,[239,68,68]]];
+    const v=Math.max(0,Math.min(30,value));
+    const i=Math.min(3,Math.max(0,stops.findIndex(s=>s[0]>=v)-1));
+    const f=(v-stops[i][0])/(stops[i+1][0]-stops[i][0]);
+    return '#'+stops[i][1].map((n,k)=>Math.round(n+(stops[i+1][1][k]-n)*f).toString(16).padStart(2,'0')).join('');
+  }
+  if(model.hi===model.lo) return '#16a36a';
+  const q=Math.max(0,Math.min(1,(value-model.lo)/(model.hi-model.lo)));
+  const stops=[[37,99,235],[22,163,106],[242,140,40]], i=q<.5?0:1, f=q<.5?q*2:(q-.5)*2;
+  return '#'+stops[i].map((v,k)=>Math.round(v+(stops[i+1][k]-v)*f).toString(16).padStart(2,'0')).join('');
+}
+function bikeTiming(act, tps, model) {
+  const times=tps.map(speedStamp).filter(Number.isFinite);
+  const result={total:null,moving:0,stopped:0,unknown:null,distance:0,average:null,edges:[]};
+  if(!times.length) return result;
+  const first=times.reduce((a,b)=>Math.min(a,b)), last=times.reduce((a,b)=>Math.max(a,b));
+  const recordedStart=speedStamp({time:act.start_time});
+  const start=Number.isFinite(recordedStart)?recordedStart:first;
+  if(start>last) return result;
+  result.total=(last-start)/1000;
+  const origin=tps.map(speedStamp).find(Number.isFinite);
+  const lower=(start-origin)/1000, upper=(last-origin)/1000;
+  let complete=true, covered=lower;
+  // Display-only partition of raw intervals. Never use five-second graph bins.
+  // No interpolation across the activity boundary: partial intervals remain unknown.
+  // The API has no end_time; its last recorded timestamp is the observable end.
+  for(const e of model.edges) {
+    const dt=e.x1-e.x0;
+    if(!Number.isFinite(e.x0) || !Number.isFinite(e.x1) || dt<=0 || dt>15 ||
+       e.x0<covered || e.x1>upper || !Number.isFinite(e.speed) || e.speed<0) continue;
+    result.edges.push(e); covered=e.x1;
+    if(e.speed===0) { result.stopped+=dt; continue; }
+    result.moving+=dt;
+    const a=tps[e.sourceIndex-1], b=tps[e.sourceIndex];
+    let distance=null;
+    if(a && b) {
+      if(model.source!=='GPS 기반 추정' && Number.isFinite(a.distance) && a.distance>=0 && Number.isFinite(b.distance) && b.distance>=a.distance && (b.distance-a.distance)/dt<30) distance=b.distance-a.distance;
+      else if(speedGPS(a) && speedGPS(b)) distance=speedDistance(a,b);
+    }
+    if(distance===null || !Number.isFinite(distance)) complete=false;
+    else result.distance+=distance;
+  }
+  result.unknown=Math.max(0,result.total-result.moving-result.stopped);
+  if(result.moving>0 && complete) result.average=result.distance/result.moving*3.6;
+  return result;
+}
+function movingSpeedSeries(model) {
+  const runs=[]; let raw=[], removed=0, moving=0, previous=null;
+  const flush=()=>{
+    if(!raw.length) return;
+    const start=raw[0].x0, bins=[];
+    for(const e of raw) {
+      let t=e.x0;
+      while(t<e.x1) {
+        const index=Math.floor((t-start)/5), end=Math.min(e.x1,start+(index+1)*5);
+        if(end<=t) break;
+        const b=bins[index] ||= {x0:t,x1:end,weighted:0,duration:0};
+        b.weighted+=e.speed*(end-t); b.duration+=end-t; b.x1=end; t=end;
+      }
+    }
+    runs.push(bins.filter(Boolean).map(b=>({x0:b.x0,x1:b.x1,y:b.weighted/b.duration})));
+    raw=[];
+  };
+  // Bicycle cards and chart consume the exact same accepted raw intervals.
+  for(const e of (model.bikeTiming ? model.bikeTiming.edges : model.edges)) {
+    const dt=e.x1-e.x0;
+    if(!Number.isFinite(dt) || dt<=0) { flush(); previous=null; continue; }
+    if(e.speed===0) { flush(); removed+=dt; previous=null; continue; }
+    if(!Number.isFinite(e.speed) || e.speed<0) { flush(); previous=null; continue; }
+    const adjacent=previous && previous.x1===e.x0 &&
+      (previous.sourceIndex===undefined || e.sourceIndex===previous.sourceIndex+1) &&
+      previous.points[1][0]===e.points[0][0] && previous.points[1][1]===e.points[0][1];
+    if(!adjacent) flush();
+    raw.push({x0:model.bikeTiming?moving:e.x0-removed,x1:model.bikeTiming?moving+dt:e.x1-removed,speed:e.speed});
+    moving+=dt; previous=e;
+  }
+  flush();
+  // Bicycle axis counts verified moving intervals only; gaps still split paths/bins.
+  // Other sports retain their previous elapsed-minus-known-stops axis.
+  return {runs,maxT:model.bikeTiming?moving:Math.max(0,model.maxT-removed)};
+}
+function renderSpeed(model) {
+  const box=document.getElementById('speedGraph');
+
+  const knownTime=model.edges.reduce((sum,e)=>sum+(Number.isFinite(e.speed)?e.x1-e.x0:0),0);
+  const missing=!model.values.length || model.edges.some(e=>!Number.isFinite(e.speed)) ||
+    model.maxT-knownTime>1e-6 || (model.bikeTiming?.unknown ?? 0)>1e-6;
+  const note=document.getElementById('speedNote');
+  note.textContent=missing?'결측: 지도 회색·그래프 공백':'';
+  note.hidden=!missing;
+  if(!model.values.length) {
+    box.innerHTML='<p class="da-empty">속도 표시 불가: 연속된 유효 GPS 좌표·시각 또는 시계열 속도가 부족합니다.</p>';
+    return;
+  }
+  const labels=model.fixedBikeScale?[0,5,10,20,30]:[model.lo,(model.lo+model.hi)/2,model.hi];
+  const colors=labels.map(v=>speedColor(v,model));
+
+  const series=movingSpeedSeries(model);
+  if(!series.runs.length) { box.innerHTML='<p class="da-empty">표시할 유효한 이동 속도가 없습니다.</p>'; return; }
+  const peak=series.runs.reduce((v,run)=>run.reduce((v,b)=>Math.max(v,b.y),v),0);
+  const rough=Math.max(1,peak/3), power=10**Math.floor(Math.log10(rough));
+  const autoTick=[1,2,5,10].find(v=>v*power>=rough)*power;
+  const top=model.fixedBikeScale?40:autoTick*3;
+  const tick=model.fixedBikeScale?top/4:autoTick;
+  const L=42,R=364,T=16,B=132;
+  const x=v=>L+v/Math.max(1,series.maxT)*(R-L), y=v=>B-v/top*(B-T);
+  let svg='<svg viewBox="0 0 386 182" role="img" aria-label="활동 시간별 5초 평균 속도 그래프, km/h"><text x="3" y="10" fill="#78828d" font-size="10">km/h</text>';
+  // Vertical user-space gradient is a speed lookup, never a time/x-position gradient.
+  // Reuse the map's color function; bike thresholds stay fixed even above 40 km/h.
+  const lineColor=!model.fixedBikeScale&&model.lo===model.hi?colors[0]:'url(#speedValueGradient)';
+  if(model.fixedBikeScale||model.lo!==model.hi) svg+=`<defs><linearGradient id="speedValueGradient" gradientUnits="userSpaceOnUse" x1="0" y1="${y(model.fixedBikeScale?0:model.lo)}" x2="0" y2="${y(model.fixedBikeScale?30:model.hi)}" color-interpolation="sRGB">`+
+    colors.map((color,i)=>`<stop offset="${model.fixedBikeScale?labels[i]/30*100:i*50}%" stop-color="${color}"/>`).join('')+'</linearGradient></defs>';
+  for(let i=0;i<(model.fixedBikeScale?5:4);i++) {
+    const yy=y(tick*i);
+    svg+=`<line x1="${L}" y1="${yy}" x2="${R}" y2="${yy}" stroke="#e0e5e9"/><text x="3" y="${yy+4}" fill="#78828d" font-size="10">${tick*i}</text>`;
+  }
+  for(let i=0;i<3;i++) svg+=`<text x="${L+(R-L)*i/2}" y="153" text-anchor="${i===0?'start':i===2?'end':'middle'}" fill="#78828d" font-size="10">${detailTime(series.maxT*i/2)}</text>`;
+  if(model.fixedBikeScale) svg+=`<defs><clipPath id="speedPlotClip"><rect x="${L}" y="${T}" width="${R-L}" height="${B-T}"/></clipPath></defs><g clip-path="url(#speedPlotClip)">`;
+  for(const run of series.runs) {
+    const first=run[0], last=run[run.length-1];
+    const points=[{x:first.x0,y:first.y},...run.map(b=>({x:(b.x0+b.x1)/2,y:b.y})),{x:last.x1,y:last.y}];
+    const path=points.map((p,i)=>(i?'L':'M')+x(p.x).toFixed(2)+' '+y(p.y).toFixed(2)).join(' ');
+    svg+=`<path d="${path} L${x(last.x1).toFixed(2)} ${B} L${x(first.x0).toFixed(2)} ${B} Z" fill="#dbeafe"/><path class="speed-line" d="${path}" fill="none" stroke="${lineColor}" stroke-width="3" stroke-linejoin="round"/>`;
+  }
+  if(model.fixedBikeScale) svg+='</g>';
+  box.innerHTML=svg+'<text x="203" y="174" text-anchor="middle" fill="#78828d" font-size="10">활동 시간 (시:분:초 / 분:초)</text></svg>';
+}
+/* SPEED_MODEL_END */
+
+function trackSegments(tps) {
+  const segments = []; let segment = [], previousTime = null;
+  for (const t of tps) {
+    const stamp = t.time ? Date.parse(/Z$|[+-]\d\d:?\d\d$/.test(t.time) ? t.time : t.time+'Z') : NaN;
+    if (previousTime !== null && Number.isFinite(stamp) && (stamp-previousTime>15000 || stamp<=previousTime)) {
+      if(segment.length) segments.push(segment); segment=[];
+    }
+    if (Number.isFinite(t.lat) && Number.isFinite(t.lon)) segment.push([t.lat, t.lon]);
+    else if (segment.length) { segments.push(segment); segment = []; }
+    previousTime=Number.isFinite(stamp)?stamp:null;
+  }
+  if (segment.length) segments.push(segment);
+  return segments;
+}
+
+function drawTrack(tps, speedModel) {
+  const segments = trackSegments(tps);
+  const pts = segments.flat();
   const el = $("#map");
   if (pts.length < 2) { el.hidden = true; return; }
   el.hidden = false;
   if (!map) {
-    map = L.map("map", { zoomControl: true, attributionControl: false });
+    map = L.map("map", { zoomControl: true, attributionControl: false, zoomSnap: 0.25 });
     L.control.attribution({ prefix: false, position: "bottomright" })
-      .addAttribution('© OpenStreetMap').addTo(map);
+      .addAttribution('© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>').addTo(map);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
     }).addTo(map);
   }
   trackLayer?.remove();
   trackLayer = L.layerGroup([
-    L.polyline(pts, { color, weight: 3, opacity: 0.9 }),
-    L.circleMarker(pts[0], { radius: 6, color: "#7ee08a", fillColor: "#7ee08a",
-                             fillOpacity: 1, weight: 2 }).bindTooltip("Старт"),
-    L.circleMarker(pts[pts.length - 1], { radius: 6, color: "#e05c5c", fillColor: "#e05c5c",
-                             fillOpacity: 1, weight: 2 }).bindTooltip("Финиш"),
+    L.polyline(speedModel.edges.map(e=>e.points), { color: "#ffffff", weight: 8, opacity: 0.96 }),
+    ...speedModel.edges.map(e=>L.polyline(e.points, { color: speedColor(e.speed,speedModel), weight: 4.5, opacity: 1 })),
+    L.marker(pts[0], {icon:L.divIcon({className:'study-pin study-start',html:'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="11" fill="#008c46" stroke="#fff" stroke-width="2"/><path d="M9 6.5 L17 12 L9 17.5 Z" fill="#fff"/></svg>',iconSize:[24,24],iconAnchor:[12,12],tooltipAnchor:[0,0]})})
+      ,
+    L.marker(pts[pts.length - 1], {icon:L.divIcon({className:'study-pin study-end',html:'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="1" y="1" width="22" height="22" rx="3" fill="#cf3434" stroke="#fff" stroke-width="2"/></svg>',iconSize:[24,24],iconAnchor:[12,12],tooltipAnchor:[0,0]})})
+      ,
   ]).addTo(map);
-  map.invalidateSize();               // контейнер был hidden — пересчитать размеры
-  map.fitBounds(L.latLngBounds(pts), { padding: [20, 20] });
+  map.invalidateSize({animate:false});
+  map.fitBounds(L.latLngBounds(pts), {paddingTopLeft:[30,30],paddingBottomRight:[30,35],maxZoom:18,animate:false});
 }
 
-const fmtPace = s => `${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,"0")}`;
+const fmtPace = s => Number.isFinite(s) && s > 0 ? `${Math.floor(Math.round(s)/60)}:${String(Math.round(s)%60).padStart(2,"0")}` : "—";
 
-function renderSplits(splits, color) {
+function renderSplits(splits, color, bike = false) {
   const sect = $("#splitsSect"), box = $("#splits");
   box.innerHTML = "";
   sect.hidden = splits.length < 2;
   if (sect.hidden) return;
-  const maxPace = Math.max(...splits.map(s => s.pace_s_km));
-  box.innerHTML = `<div class="split head"><span>км</span><span>темп</span><span></span><span class="elev">набор</span></div>`;
+  const values = splits.map(s => Number.isFinite(s.pace_s_km) && s.pace_s_km > 0 ? (bike ? 3600 / s.pace_s_km : s.pace_s_km) : null);
+  const maxValue = Math.max(1, ...values.filter(v => v != null));
+  box.innerHTML = `<div class="split head"><span>km</span><span>${bike ? "km/h" : "min/km"}</span><span></span><span class="elev">상승 (m)</span></div>`;
+  box.title = bike ? "표시용 계산: 3600 ÷ API pace_s_km(초/km). 원본 측정속도가 아닙니다." : "API 구간 페이스(초/km)를 분:초로 표시";
   for (const s of splits) {
     const el = document.createElement("div");
     el.className = "split";
     el.style.setProperty("--sport-c", color);
-    el.innerHTML = `<span>${s.km}</span><span>${fmtPace(s.pace_s_km)}</span>
-      <div class="bar" style="width:${Math.max(8, s.pace_s_km / maxPace * 100)}%"></div>
-      <span class="elev">${s.elev_gain_m ? Math.round(s.elev_gain_m) + " м" : "—"}</span>`;
+    const value = Number.isFinite(s.pace_s_km) && s.pace_s_km > 0 ? (bike ? 3600 / s.pace_s_km : s.pace_s_km) : null;
+    el.innerHTML = `<span>${s.km}</span><span>${bike ? (value == null ? "—" : value.toFixed(2)) : fmtPace(s.pace_s_km)}</span>
+      <div class="bar" style="width:${value == null ? 0 : Math.max(8, value / maxValue * 100)}%"></div>
+      <span class="elev">${s.elev_gain_m != null ? Math.round(s.elev_gain_m) + " m" : "—"}</span>`;
     box.appendChild(el);
   }
 }
-
-// номер последнего запроса показа: ответы приходят в любом порядке (VPN),
-// рисуем только самый свежий выбор. selectedId меняется лишь вместе с панелью —
-// поэтому заметки, фото и категория всегда уходят в ту тренировку, что на экране.
-let showSeq = 0;
 
 function markSelected() {
   document.querySelectorAll("#list .act").forEach(el =>
     el.classList.toggle("sel", +el.dataset.id === selectedId));
 }
 
+/* DETAIL_A_HELPERS_START */
+function detailTime(s) {
+  if (!Number.isFinite(s) || s < 0) return '사용 불가';
+  s = Math.floor(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2,'0')}:${sec}` : `${String(m).padStart(2,'0')}:${sec}`;
+}
+function detailSeries(tps, key, startTime = null) {
+  const start = startTime ? Date.parse(asUTC(startTime)) : NaN;
+  const result = {segments:[], values:[], maxT:0}; let segment = [], previous = null, origin = Number.isFinite(start) ? start : null;
+  for (const p of tps) {
+    const stamp = typeof p.time === 'string' && p.time ? Date.parse(/Z$|[+-]\d\d:?\d\d$/.test(p.time) ? p.time : p.time+'Z') : NaN;
+    if (Number.isFinite(stamp) && origin === null) origin = stamp;
+    const seconds = (stamp-origin)/1000;
+    if (Number.isFinite(seconds)) result.maxT = Math.max(result.maxT, seconds);
+    const value = p[key];
+    const valid = Number.isFinite(stamp) && seconds >= 0 && Number.isFinite(value) && (key !== 'hr' || value > 0);
+    if (!valid || (previous !== null && (seconds-previous > 15 || seconds <= previous))) {
+      if (segment.length) result.segments.push(segment);
+      segment=[]; previous=null;
+    }
+    if (!valid) continue;
+    segment.push({x:seconds,y:value}); result.values.push(value); previous=seconds;
+  }
+  if(segment.length) result.segments.push(segment);
+  return result;
+}
+/* DETAIL_A_HELPERS_END */
+
+function detailGraph(id, series, color, unit) {
+  const box = document.getElementById(id);
+  if (!series.values.length) { box.innerHTML='<p class="da-empty">측정값 또는 유효한 측정 시각이 없어 그래프를 표시할 수 없습니다.</p>'; return; }
+  let lo=Math.min(...series.values), hi=Math.max(...series.values);
+  const pad=Math.max((hi-lo)*.15, .5); lo-=pad; hi+=pad;
+  const L=42,R=364,T=16,B=132, x=v=>L+v/Math.max(series.maxT,1)*(R-L), y=v=>B-(v-lo)/(hi-lo)*(B-T);
+  let svg=`<svg viewBox="0 0 386 166" role="img" aria-label="경과 시간별 ${unit} 측정값 그래프"><text x="3" y="10" fill="#78828d" font-size="10">${unit}</text>`;
+  for(let i=0;i<3;i++) { const yy=T+(B-T)*i/2, val=hi-(hi-lo)*i/2;
+    svg+=`<line x1="${L}" y1="${yy}" x2="${R}" y2="${yy}" stroke="#e0e5e9" stroke-dasharray="4 5"/><text x="3" y="${yy+4}" fill="#78828d" font-size="11">${unit==='m'?val.toFixed(1):Math.round(val)}</text>`;
+    const xx=L+(R-L)*i/2;
+    svg+=`<text x="${xx}" y="155" text-anchor="${i===0?'start':i===2?'end':'middle'}" fill="#78828d" font-size="11">${detailTime(series.maxT*i/2)}</text>`;
+  }
+  for(const segment of series.segments) {
+    svg+=`<path d="${segment.map((p,i)=>(i?'L':'M')+x(p.x).toFixed(2)+' '+y(p.y).toFixed(2)).join(' ')}" fill="none" stroke="${color}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>`;
+    if(segment.length===1) svg+=`<circle cx="${x(segment[0].x)}" cy="${y(segment[0].y)}" r="2" fill="${color}"/>`;
+  }
+  box.innerHTML=svg+'</svg>';
+}
+/* ACTIVITY_WEATHER_START */
+const activityWeatherCache=new Map();
+function weatherRequest(act,tps,now=Date.now()) {
+  const p=tps.find(p=>Number.isFinite(p.lat)&&Math.abs(p.lat)<=90&&Number.isFinite(p.lon)&&Math.abs(p.lon)<=180);
+  const s=act.start_time;
+  const time=typeof s==='string'&&s?Date.parse(/Z$|[+-]\d\d:?\d\d$/.test(s)?s:s+'Z'):NaN;
+  if(!p||!Number.isFinite(time)||time>now) return null;
+  const hour=Math.round(time/3600000)*3600, day=new Date(hour*1000).toISOString().slice(0,10);
+  const recent=now-hour*1000<7*86400000;
+  const base=recent?'https://api.open-meteo.com/v1/forecast':'https://archive-api.open-meteo.com/v1/archive';
+  const params=new URLSearchParams({latitude:String(p.lat),longitude:String(p.lon),start_date:day,end_date:day,hourly:'temperature_2m,weather_code',temperature_unit:'celsius',timezone:'GMT',timeformat:'unixtime'});
+  return {hour,url:base+'?'+params,key:[p.lat,p.lon,hour].join('|')};
+}
+function weatherSymbol(code) {
+  const cloud='<path fill="#dbe7ee" stroke="#78909c" d="M5 17h13a4 4 0 0 0 0-8 6 6 0 0 0-11-1 4.5 4.5 0 0 0-2 9Z"/>';
+  const sun='<circle cx="12" cy="12" r="4" fill="#facc15" stroke="#f59e0b"/><path stroke="#f59e0b" d="M12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2"/>';
+  let label,shape;
+  if(code===0){label='맑음';shape=sun;}
+  else if([1,2,3].includes(code)){label=code===1?'대체로 맑음':code===2?'구름 조금':'흐림';shape=code===3?cloud:'<g transform="translate(-1 -2) scale(.6)">'+sun+'</g>'+cloud;}
+  else if([45,48].includes(code)){label='안개';shape=cloud+'<path stroke="#94a3b8" d="M3 20h18M6 23h12"/>';}
+  else if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)){label=[56,57,66,67].includes(code)?'어는 비':[51,53,55].includes(code)?'이슬비':'비';shape=cloud+'<path stroke="#3b82f6" d="m8 19-1 3m6-3-1 3m6-3-1 3"/>';}
+  else if([71,73,75,77,85,86].includes(code)){label='눈';shape=cloud+'<path stroke="#38bdf8" d="M8 19v4m-2-2h4m6-2v4m-2-2h4"/>';}
+  else if([95,96,99].includes(code)){label=code===95?'뇌우':'우박 동반 뇌우';shape=cloud+'<path stroke="#f59e0b" d="m13 15-4 5h4l-2 4"/>';}
+  else return null;
+  return {label,svg:`<svg width="18" height="18" style="display:block;flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g transform="translate(2 2) scale(.833333)">${shape}</g></svg>`};
+}
+async function loadActivityWeather(act,tps,version,id) {
+  const request=weatherRequest(act,tps); if(!request) return;
+  try {
+    let value=activityWeatherCache.get(request.key);
+    if(value&&Date.now()-value.cachedAt>3600000){activityWeatherCache.delete(request.key);value=null;}
+    if(!value){
+      const response=await fetch(request.url,{signal:AbortSignal.timeout(8000),credentials:'omit',referrerPolicy:'no-referrer'});
+      if(!response.ok) return;
+      const data=await response.json(),h=data.hourly;
+      const i=Array.isArray(h?.time)?h.time.indexOf(request.hour):-1;
+      if(i<0||!Number.isFinite(h.temperature_2m?.[i])||!weatherSymbol(h.weather_code?.[i])) return;
+      value={temperature:h.temperature_2m[i],code:h.weather_code[i],cachedAt:Date.now()};
+      if(activityWeatherCache.size>=100) activityWeatherCache.delete(activityWeatherCache.keys().next().value);
+      activityWeatherCache.set(request.key,value);
+    }
+    if(version!==activityRequestVersion||id!==selectedId) return;
+    const symbol=weatherSymbol(value.code),el=document.getElementById('activityWeather');
+    el.innerHTML=symbol.svg+`<span>${Math.round(value.temperature)}°C</span><span class="weather-help">${symbol.label} · 운동 시작 시각 기준·지역 추정<br><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a></span>`;
+    el.setAttribute?.('aria-label',`${symbol.label}, ${Math.round(value.temperature)}°C, 운동 시작 시각 기준·지역 추정`);
+    el.hidden=false;
+  } catch (_) { /* Missing weather must never delay or break the activity view. */ }
+}
+/* ACTIVITY_WEATHER_END */
+
+function isApprovedStrength(act) {
+  return sportCat(act) === 'strength';
+}
+
+function renderStrengthLayout(act, hrs, card) {
+  const strength=isApprovedStrength(act);
+  document.querySelector('#detail .da-map-wrap').hidden=strength;
+  document.querySelector('#detail section[aria-label="속도 변화"]').hidden=strength;
+  const status=document.getElementById('strengthDataStatus');
+  status.hidden=!strength;
+  status.textContent='';
+  if(!strength) return;
+  document.getElementById('detailTitle').textContent='근력운동';
+  // Imported zero duration is not evidence of a measured zero-length workout.
+  const duration=Number.isFinite(act.duration_s)&&act.duration_s>0?detailTime(act.duration_s):'—';
+  document.getElementById('stats').innerHTML=card('활동 시간',duration,'').replace('활동 시간','운동 시간')+
+    card('소모 열량',Number.isFinite(act.calories)&&act.calories>=0?String(act.calories):'—','kcal');
+  for(const [id,value] of [['hrAverage',act.hr_avg],['hrMaximum',act.hr_max]]) {
+    document.getElementById(id).innerHTML=Number.isFinite(value)&&value>0?`${Math.round(value)} <i>bpm</i>`:'데이터 없음';
+  }
+  const names={start_time:'날짜',duration_s:'운동 시간',calories:'열량',hr_avg:'평균 심박수',hr_max:'최고 심박수',heart_rate_series:'심박 시계열'};
+  const absent=Object.entries(act.data_status||{}).filter(([,v])=>v==='missing').map(([key])=>names[key]||key);
+  const recovery=act.recovery||{};
+  const failures={original_missing_or_hash_mismatch:'원본 없음 또는 해시 불일치',source_missing_required_data:'원본에도 필요한 데이터 없음'};
+  const messages=[];
+  if(absent.length)messages.push('데이터 없음: '+absent.join(' · '));
+  if(['failed','partial'].includes(recovery.status))messages.push((recovery.status==='failed'?'복구 실패: ':'부분 복구: ')+(failures[recovery.reason]||recovery.reason||'원인 확인 필요'));
+  status.textContent=messages.join(' / ');
+  status.hidden=!messages.length;
+  if(!hrs.values.length) {
+    document.getElementById('hrGraph').innerHTML='<p class="da-empty">심박수 기록 없음</p>';
+  }
+}
+
+function heartZonesMarkup(result) {
+  const heading='<div class="da-section-label">심박수 구간 분포</div>';
+  const note=text=>heading+`<div class="da-metric"><p class="da-small-note">${esc(text)}</p></div>`;
+  if(result.status!=='ok') {
+    const reasons={original_missing_or_hash_mismatch:'원본 없음 또는 저장된 해시 불일치',activity_not_approved:'분석 승인 대상 아님',database_unavailable:'기록 조회 불가',activity_not_found:'기록 없음'};
+    return note('분석 불가: '+(reasons[result.reason]||result.reason||'API 응답 오류'));
+  }
+  const total=result.valid_observed_seconds;
+  if(!Number.isFinite(total)||total<=0) return note('분석 불가: 유효 심박 관측 시간 없음');
+  const time=s=>{if(!Number.isFinite(s)||s<0)return '—';const v=Math.round(s);return `${Math.floor(v/60)}:${String(v%60).padStart(2,'0')}`;};
+  const colors={Z5:'#db5963',Z4:'#e98535',Z3:'#43a66b',Z2:'#3988cc',Z1:'#939ba5'};
+  let rows='';
+  for(const zone of ['Z5','Z4','Z3','Z2','Z1']) {
+    const s=result.zones_seconds?.[zone],range=result.criteria?.zones_bpm?.[zone];
+    if(!Number.isFinite(s)||s<0||!Array.isArray(range))return note('분석 불가: 구간 데이터 누락');
+    const percent=s/total*100,label=s===0?'0':percent.toFixed(1);
+    rows+=`<div style="margin:12px 0"><div style="display:flex;justify-content:space-between;gap:10px;font-size:13px"><span><b>${zone}</b> <span style="opacity:.7">${esc(range[0])}–${esc(range[1])} bpm</span></span><span>${label}% · ${time(s)}</span></div><div style="height:7px;margin-top:6px;background:rgba(128,128,128,.14);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100,percent)}%;background:${colors[zone]};border-radius:4px"></div></div></div>`;
+  }
+  return heading+`<div class="da-metric">${rows}</div>`;
+}
+
+async function loadHeartZones(act,version) {
+  const el=document.getElementById('hrZones');
+  el.hidden=!isApprovedStrength(act);
+  el.innerHTML='';
+  if(el.hidden)return;
+  el.innerHTML='<div class="da-section-label">심박수 구간 분포</div><p class="da-small-note">분석 중…</p>';
+  try {
+    const response=await fetch(`/api/activities/${act.id}/hr-zones`);
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    const result=await response.json();
+    if(version!==activityRequestVersion||act.id!==selectedId)return;
+    if(result.status==='ok'&&(result.activity_id!==act.id||result.source_hash!==act.series_source_hash)) {
+      el.innerHTML=heartZonesMarkup({status:'unavailable',reason:'기본 그래프와 원본 연결 불일치'});
+      return;
+    }
+    el.innerHTML=heartZonesMarkup(result);
+  } catch(error) {
+    if(version!==activityRequestVersion||act.id!==selectedId)return;
+    el.innerHTML=heartZonesMarkup({status:'unavailable',reason:'조회 실패 ('+error.message+')'});
+  }
+}
+
+function renderHeartZonesAvailability(act) {
+  void loadHeartZones(act,activityRequestVersion);
+}
+
+let detailExportBusy = false, detailExportRecord = null, detailExportReady = Promise.resolve();
+let activityRequestVersion = 0;
 async function showActivity(id) {
-  const seq = ++showSeq;
-  const [act, tps, splits] = await Promise.all([      // параллельно, не по очереди
-    fetch(`/api/activities/${id}`).then(r => r.json()),
-    fetch(`/api/activities/${id}/trackpoints?step=3`).then(r => r.json()),
-    fetch(`/api/activities/${id}/splits`).then(r => r.json()),
-  ]);
-  if (seq !== showSeq) return;        // пока ждали, выбрали другую тренировку
+  if (detailExportBusy) return;
+  detailExportRecord = null;
+  const requestVersion = ++activityRequestVersion;
   selectedId = id;
+  $("#hrZones").hidden=true;
+  $("#hrZones").innerHTML='';
+  $("#activityWeather").hidden=true;
+  $("#activityWeather").innerHTML='';
+  $("#detail").hidden = true;
+  $("#activityTools").hidden = true;
+  $("#placeholder").textContent = "운동 기록을 불러오는 중입니다…";
+  $("#placeholder").hidden = false;
+  let act, tps, splits;
+  try {
+    [act, tps, splits] = await Promise.all([
+      `/api/activities/${id}`,
+      `/api/activities/${id}/trackpoints?step=1`,
+      `/api/activities/${id}/splits`,
+    ].map(async url => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        const error = new Error("Activity request failed");
+        error.httpStatus = response.status;
+        throw error;
+      }
+      return response.json();
+    }));
+  } catch (error) {
+    if (requestVersion !== activityRequestVersion || selectedId !== id) return;
+    $("#placeholder").textContent = error.httpStatus
+      ? `운동 기록을 불러오지 못했습니다 (HTTP ${error.httpStatus}). 다른 기록을 선택하거나 다시 시도해 주세요.`
+      : "운동 기록을 불러오지 못했습니다. 네트워크 연결 또는 서버 응답을 확인한 뒤 기록을 다시 선택해 주세요.";
+    return;
+  }
+  // Every selection has its own version, including repeated clicks on the same ID.
+  if (requestVersion !== activityRequestVersion || selectedId !== id) return;
   markSelected();
   $("#placeholder").hidden = true;
   $("#detail").hidden = false;
+  $("#activityTools").hidden = false;
   const sc = catColor(act);
-  $("#detailTitle").innerHTML =
-    `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${sc};margin-right:7px"></span>` +
-    `${esc(act.sport)} · ${fmtDate(act.start_time)}`;
-  $("#stats").innerHTML = `
-    <div class="stat dst"><b style="color:${sc}">${((act.distance_m||0)/1000).toFixed(2)}</b><span>км</span></div>
-    <div class="stat"><b>${fmtDur(act.duration_s)}</b><span>время</span></div>
-    <div class="stat spd"><b>${pace(act.duration_s, act.distance_m)}</b><span>темп</span></div>
-    <div class="stat hr"><b>${act.hr_avg ? Math.round(act.hr_avg) : "—"}</b><span>ср. пульс</span></div>
-    <div class="stat hr"><b>${act.hr_max ? Math.round(act.hr_max) : "—"}</b><span>макс. пульс</span></div>
-    <div class="stat"><b>${act.calories ?? "—"}</b><span>ккал</span></div>
-    <div class="stat"><b>${act.ascent_m ? Math.round(act.ascent_m) : "—"}</b><span>набор, м</span></div>`;
+  $("#detailTitle").textContent = sportCat(act)==='bike' ? '야외 자전거' : sportLabel(act) + ' 운동';
+  $("#detailDate").textContent = fmtDate(act.start_time);
+  if(isApprovedStrength(act)) tps=act.trackpoints||[];
+  const hrs=detailSeries(tps,'hr',isApprovedStrength(act) ? act.start_time : null);
+  const mean=isApprovedStrength(act) ? (Number.isFinite(act.hr_avg)&&act.hr_avg>0?act.hr_avg:null) : hrs.values.length ? hrs.values.reduce((a,b)=>a+b,0)/hrs.values.length : null;
+  const avg=mean===null ? '사용 불가' : String(Math.round(mean));
+  const max=hrs.values.length ? String(Math.max(...hrs.values)) : '사용 불가';
+  // Display stored API summary values; these are not asserted to be original TCX Lap values.
+  // Keep zero distinct from missing/invalid data. No persistence or parser changes.
+  const summaryIcons = {
+    '활동 거리':['#008c46','<circle cx="5" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6h9a4 4 0 0 1 0 8H8a4 4 0 0 0 0 8"/>'],
+    '활동 시간':['#6b8192','<circle cx="12" cy="14" r="8"/><path d="M9 2h6M12 2v4M18 6l2-2M12 10v5l3 2"/>'],
+    '소모 열량':['#e98535','<path d="M12 2c1 5 6 6 6 11a6 6 0 0 1-12 0c0-3 2-5 3-6 0 3 1 4 2 4 2-3 2-6 1-9Z"/><path d="M12 14c2 2 3 3 3 4a3 3 0 0 1-6 0c0-1 1-2 3-4Z"/>'],
+    '평균 속도':['#3988cc','<path d="M4 19a10 10 0 1 1 16 0Z"/><path d="M12 5v2M5 10l2 1M19 10l-2 1M12 15l4-5"/><circle cx="12" cy="15" r="1"/>']
+  };
+  const summaryIcon=key=>`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${summaryIcons[key][0]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${summaryIcons[key][1]}</svg>`;
+  const card=(key,value,unit,source='')=>`<div class="da-metric"><div class="da-key">${summaryIcon(key)}${key}</div><div class="da-value ${value==='—'?'da-unavailable':''}">${value} <span class="da-unit">${value==='—'?'':unit}</span></div>${source?`<div class="da-source">${source}</div>`:''}</div>`;
+  const stored = value => Number.isFinite(value) && value >= 0;
+  const isBike=sportCat(act)==='bike', speedModel=buildSpeedModel(tps);
+  speedModel.fixedBikeScale=isBike;
+  const timing=isBike?bikeTiming(act,tps,speedModel):null;
+  summaryIcons['활동 시간']=summaryIcons['활동 시간'];
+  summaryIcons['평균 속도']=summaryIcons['평균 속도'];
+  const speed=isBike && timing.average!==null?timing.average.toFixed(2):'—';
+  const timeNote=isBike && timing.total!==null
+    ? `전체 ${detailTime(timing.total)} · 정지 ${detailTime(timing.stopped)}`+(timing.unknown>0?` · 확인 불가 ${detailTime(timing.unknown)}`:'')
+    : isBike?'전체 — · 정지 — · 확인 불가':'';
+  $("#stats").innerHTML =
+    card('활동 거리',stored(act.distance_m)?(act.distance_m/1000).toFixed(2):'—','km')+
+    card(isBike?'활동 시간':'활동 시간',isBike?(timing.total!==null?detailTime(timing.moving):'—'):(stored(act.duration_s)?detailTime(act.duration_s):'—'),'',timeNote)+
+    card('소모 열량',stored(act.calories)?String(act.calories):'—','kcal')+
+    card(isBike?'평균 속도':'평균 속도',speed,'km/h');
+  $("#hrAverage").innerHTML=avg+(mean===null?'':' <i>bpm</i>');
+  $("#hrMaximum").innerHTML=max+(hrs.values.length?' <i>bpm</i>':'');
 
-  drawTrack(tps, sc);
-  renderSplits(splits, sc);
+  drawTrack(tps, speedModel);
+  renderSpeed(isBike?{...speedModel,bikeTiming:timing}:speedModel);
+  $("#mapEmpty").hidden = !$("#map").hidden;
+  detailGraph('hrGraph',hrs,'#e56573','bpm');
+  renderStrengthLayout(act,hrs,card);
+  const zonesReady = loadHeartZones(act, requestVersion);
+
+  renderSplits(splits, sc, sportCat(act) === "bike");
+
 
   document.querySelectorAll("#catSeg button").forEach(b =>
     b.classList.toggle("on", b.dataset.c === sportCat(act)));
@@ -460,69 +944,63 @@ async function showActivity(id) {
   $("#notes").value = act.notes || "";
   $("#notesStatus").textContent = "";
   renderPhotos(act.photos || []);
+  const weatherReady = !isApprovedStrength(act) ? loadActivityWeather(act,tps,requestVersion,id) : Promise.resolve();
+  detailExportRecord = act;
+  detailExportReady = Promise.all([zonesReady, weatherReady]);
 
-  const labels = tps.map(t => ((t.distance ?? 0)/1000).toFixed(2));
-  const speedKmh = tps.map(t => t.speed != null ? +(t.speed*3.6).toFixed(1) : null);
-  actChart?.destroy();
-  actChart = new Chart($("#actChart"), {
-    type: "line",
-    data: { labels, datasets: [
-      { label: "Пульс", data: tps.map(t => t.hr), borderColor: "#e05c5c",
-        pointRadius: 0, borderWidth: 1.5, yAxisID: "hr", spanGaps: true },
-      { label: "Скорость, км/ч", data: speedKmh, borderColor: "#58a6ff",
-        pointRadius: 0, borderWidth: 1.2, yAxisID: "spd", spanGaps: true, hidden: !speedKmh.some(v => v) },
-      { label: "Высота, м", data: tps.map(t => t.elevation), borderColor: "#4d5a48",
-        backgroundColor: "#4d5a4833", fill: true, pointRadius: 0, borderWidth: 1,
-        yAxisID: "elev", spanGaps: true },
-    ]},
-    options: {
-      animation: false, interaction: { mode: "index", intersect: false },
-      plugins: { legend: { labels: { color: "#d7dee6" } } },
-      scales: {
-        x: { title: { display: true, text: "км", color: "#7d8b99" },
-             ticks: { color: "#7d8b99", maxTicksLimit: 12 }, grid: { color: "#242d37" } },
-        hr:  { position: "left", ticks: { color: "#e05c5c" }, grid: { color: "#242d37" } },
-        spd: { position: "right", ticks: { color: "#58a6ff" }, grid: { drawOnChartArea: false } },
-        elev:{ display: false },
-      }
-    }
-  });
 }
 
 document.querySelectorAll("#catSeg button").forEach(b => b.onclick = async () => {
   if (!selectedId || b.classList.contains("on")) return;
-  if (!await send(`/api/activities/${selectedId}/category`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ category: b.dataset.c }),
-  })) return;
-  showActivity(selectedId);       // детали — с новым цветом
-  reload();                       // список и график — категория меняет итоги
+  const id=selectedId, version=activityRequestVersion;
+  const buttons=[...document.querySelectorAll('#catSeg button')];
+  buttons.forEach(button=>button.disabled=true);
+  try {
+    const response=await fetch(`/api/activities/${id}/category`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category: b.dataset.c }),
+    });
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    if(selectedId===id&&activityRequestVersion===version)await showActivity(id);
+    await reload();
+  } catch(error) {
+    alert('운동 종류를 저장하지 못했습니다: '+error.message);
+  } finally {
+    buttons.forEach(button=>button.disabled=false);
+  }
 });
 
 $("#delBtn").onclick = async () => {
-  if (!selectedId || !confirm("Удалить тренировку?")) return;
-  if (!await send(`/api/activities/${selectedId}`, { method: "DELETE" })) return;
-  showSeq++;                      // отменить ещё не дорисованный showActivity
+  if (!selectedId || !confirm("이 운동 기록을 삭제할까요?")) return;
+  const id = selectedId;
+  if (!await send(`/api/activities/${id}`, { method: "DELETE" })) return;
+  if (selectedId !== id) { await reload(); return; }
+  activityRequestVersion++;
+  detailExportRecord = null;
   selectedId = null;
   $("#detail").hidden = true; $("#placeholder").hidden = false;
+  $("#activityTools").hidden = true;
   reload();
 };
 
 $("#notesSave").onclick = async () => {
   if (!selectedId) return;
+  const id = selectedId, version = activityRequestVersion;
   const st = $("#notesStatus");
-  st.classList.remove("err"); st.textContent = "сохранение…";
+  st.classList.remove("err"); st.textContent = "저장 중…";
   try {
-    const r = await fetch(`/api/activities/${selectedId}/notes`, {
+    const r = await fetch(`/api/activities/${id}/notes`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes: $("#notes").value }),
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    st.textContent = "сохранено";
-    setTimeout(() => { if (st.textContent === "сохранено") st.textContent = ""; }, 2000);
+    if (selectedId !== id || activityRequestVersion !== version) return;
+    st.textContent = "저장되었습니다";
+    setTimeout(() => { if (st.textContent === "저장되었습니다") st.textContent = ""; }, 2000);
   } catch {
+    if (selectedId !== id || activityRequestVersion !== version) return;
     st.classList.add("err");
-    st.textContent = "не сохранено — проверь связь и повтори";
+    st.textContent = "저장하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.";
   }
 };
 
@@ -535,11 +1013,11 @@ function renderPhotos(photos) {
     const media = p.kind === "video"
       ? `<video src="/api/photos/${p.id}" preload="metadata" muted></video><span class="play">▶</span>`
       : `<img src="/api/photos/${p.id}?thumb=1" loading="lazy" alt="">`;
-    el.innerHTML = `${media}<button title="удалить">×</button>`;
+    el.innerHTML = `${media}<button title="삭제">×</button>`;
     const m = el.querySelector("img, video");
     if (m) m.onclick = () => window.open(`/api/photos/${p.id}`, "_blank");
     el.querySelector("button").onclick = async () => {
-      if (!confirm("Удалить фото?")) return;
+      if (!confirm("이 사진 또는 동영상을 삭제할까요?")) return;
       if (await send(`/api/photos/${p.id}`, { method: "DELETE" })) el.remove();
     };
     grid.appendChild(el);
@@ -558,8 +1036,8 @@ function uploadOne(url, file, onProgress) {
       try { detail = JSON.parse(xhr.responseText).detail || detail; } catch {}
       resolve({ ok: xhr.status >= 200 && xhr.status < 300, detail });
     };
-    xhr.onerror = () => resolve({ ok: false, detail: "соединение прервалось" });
-    xhr.ontimeout = () => resolve({ ok: false, detail: "таймаут" });
+    xhr.onerror = () => resolve({ ok: false, detail: "연결이 끊겼습니다" });
+    xhr.ontimeout = () => resolve({ ok: false, detail: "응답 시간이 초과되었습니다" });
     const fd = new FormData(); fd.append("file", file);
     xhr.send(fd);
   });
@@ -576,7 +1054,7 @@ async function uploadBatch(files, url, prog) {
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
     const mb = (f.size / 1048576).toFixed(1);
-    const head = (files.length > 1 ? `(${i + 1}/${files.length}) ` : "") + `${f.name} · ${mb} МБ`;
+    const head = (files.length > 1 ? `(${i + 1}/${files.length}) ` : "") + `${f.name} · ${mb} MiB`;
     bar.style.width = "0%"; txt.textContent = `${head} — 0%`;
     const r = await uploadOne(url, f, p => {
       bar.style.width = Math.round(p * 100) + "%";
@@ -586,9 +1064,9 @@ async function uploadBatch(files, url, prog) {
   }
   if (errors.length) {
     prog.classList.add("err");
-    txt.textContent = `✗ ${errors.join("; ")}` + (ok ? ` · добавлено ${ok}` : "");
+    txt.textContent = `✗ ${errors.join("; ")}` + (ok ? ` · ${ok}개 추가됨` : "");
   } else {
-    bar.style.width = "100%"; txt.textContent = `✓ Загружено: ${ok}`;
+    bar.style.width = "100%"; txt.textContent = `✓ ${ok}개 업로드 완료`;
     prog._hideT = setTimeout(() => { prog.hidden = true; }, 4000);
   }
 }
@@ -617,5 +1095,7 @@ drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover"); uploadF
 
 reload();
 </script>
+<script src="/static/vendor/html2canvas-1.4.1.min.js"></script>
+<script src="/static/detail-export.js"></script>
 </body>
 </html>
