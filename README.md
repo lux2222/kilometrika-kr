@@ -14,6 +14,21 @@
 
 
 
+## 운동 결과 이미지
+
+실제 PNG 저장 결과입니다. 이미지를 누르면 원본 크기로 볼 수 있습니다.
+
+<table>
+  <tr>
+    <th>야외 자전거</th>
+    <th>근력운동</th>
+  </tr>
+  <tr>
+    <td valign="top"><a href="docs/images/cycling-result.png"><img src="docs/images/cycling-result.png" alt="야외 자전거 운동 결과 PNG" width="240"></a></td>
+    <td valign="top"><a href="docs/images/strength-result.png"><img src="docs/images/strength-result.png" alt="근력운동 결과 PNG" width="240"></a></td>
+  </tr>
+</table>
+
 ## 무엇을 할 수 있나요?
 
 - **운동 기록 모아 보기:** TCX·GPX 파일을 올리고 날짜별로 찾아볼 수 있습니다. 목록에는 종목에 맞춰 거리나 소모 열량, 운동 시간을 표시합니다.
