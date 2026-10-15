@@ -24,7 +24,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile
 from pydantic import BaseModel
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from db import Store
@@ -296,7 +296,10 @@ def splits(act_id: int, size: float = 1000):
            if t["distance"] is not None and t["time"]]
     if len(tps) < 2:
         return []
-    pts = [(t["distance"], datetime.fromisoformat(t["time"]).timestamp(),
+    # дистанция от первой точки: трек второго/возобновлённого круга может
+    # начинаться с 1500 м, и тогда первая граница «1 км» оказывается позади
+    base = tps[0]["distance"]
+    pts = [(t["distance"] - base, datetime.fromisoformat(t["time"]).timestamp(),
             t["elevation"]) for t in tps]
     out = []
     boundary = size
@@ -374,6 +377,21 @@ _VIDEO_EXT = {".mp4", ".mov", ".webm", ".m4v"}
 _MEDIA_EXT = _IMAGE_EXT | _VIDEO_EXT
 _MEDIA_MAX = {ext: 25 * 1024 * 1024 for ext in _IMAGE_EXT}      # фото: 25 МБ
 _MEDIA_MAX.update({ext: 500 * 1024 * 1024 for ext in _VIDEO_EXT})  # видео: 500 МБ
+_MAX_BODY = max(_MEDIA_MAX.values()) + 1024 * 1024    # + запас на multipart-обёртку
+
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    """Starlette принимает и спулит всё тело ДО вызова эндпоинта, поэтому
+    лимит внутри add_photo срабатывает лишь после загрузки целиком.
+    Здесь отбиваем заведомо огромное тело по Content-Length сразу."""
+    if request.method == "POST":
+        cl = request.headers.get("content-length", "")
+        if cl.isdigit() and int(cl) > _MAX_BODY:
+            return JSONResponse(
+                {"detail": f"file too large ({_MAX_BODY // 1024 // 1024} MB max)"},
+                status_code=413)
+    return await call_next(request)
 
 
 def media_kind(filename: str) -> str:
@@ -384,21 +402,23 @@ THUMB_SIZE = 400          # длинная сторона миниатюры
 
 
 def make_thumb(src_path: Path) -> None:
-    """Миниатюра рядом с оригиналом: .thumb/<имя>.jpg. Ошибки не фатальны."""
+    """Миниатюра рядом с оригиналом: .thumb/<имя.расш>.jpg. Ошибки не фатальны."""
     try:
         from PIL import Image, ImageOps
-        tdir = src_path.parent / ".thumb"
-        tdir.mkdir(exist_ok=True)
+        tp = thumb_path(src_path)
+        tp.parent.mkdir(exist_ok=True)
         img = Image.open(src_path)
         img = ImageOps.exif_transpose(img)      # фото с телефона: уважаем ориентацию
         img.thumbnail((THUMB_SIZE, THUMB_SIZE))
-        img.convert("RGB").save(tdir / (src_path.stem + ".jpg"), quality=80)
+        img.convert("RGB").save(tp, quality=80)
     except Exception as e:
         log.warning("thumbnail failed for %s: %s", src_path.name, e)
 
 
 def thumb_path(orig: Path) -> Path:
-    return orig.parent / ".thumb" / (orig.stem + ".jpg")
+    # полное имя, а не stem: у sunset.jpg и sunset.png должны быть разные миниатюры.
+    # Старые миниатюры (по stem) просто не находятся и лениво перегенерируются.
+    return orig.parent / ".thumb" / (orig.name + ".jpg")
 
 
 def media_response(path: Path, name: str) -> FileResponse:
@@ -423,7 +443,8 @@ async def add_photo(act_id: int, file: UploadFile):
     while dst.exists():
         dst = pdir / f"{Path(safe).stem}-{i}{ext}"
         i += 1
-    # потоковая запись: видео не должно проезжать через память целиком
+    # кусками: видео не должно проезжать через память целиком. Лимит по типу
+    # проверяется тут, общий потолок — раньше, в limit_upload_size (до спула тела)
     size = 0
     try:
         with open(dst, "wb") as out:
@@ -432,7 +453,8 @@ async def add_photo(act_id: int, file: UploadFile):
                 if size > limit:
                     raise HTTPException(413, f"file too large ({limit // 1024 // 1024} MB max)")
                 await asyncio.to_thread(out.write, chunk)
-    except HTTPException:
+    except BaseException:
+        # любой сбой (413, нет места, отмена) — не оставляем огрызок без записи в БД
         dst.unlink(missing_ok=True)
         raise
     if media_kind(dst.name) == "image":
@@ -490,7 +512,10 @@ def frame_png(request: Request):
 
 @app.get("/")
 def index():
-    return FileResponse(Path(__file__).parent / "static" / "index.html")
+    # no-cache: браузер обязан перепроверять страницу (по ETag) на каждом заходе,
+    # иначе после деплоя крутится старый index.html из кэша — загрузка «в пустоту».
+    return FileResponse(Path(__file__).parent / "static" / "index.html",
+                        headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"))

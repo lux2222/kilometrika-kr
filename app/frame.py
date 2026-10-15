@@ -7,7 +7,9 @@ Pure palette colors only, so the firmware maps them 1:1 without dithering.
 """
 from __future__ import annotations
 
+import hashlib
 import io
+import json
 import os
 from datetime import datetime, timezone
 
@@ -177,9 +179,11 @@ def _png(img: Image.Image) -> bytes:
 
 def frame_etag(store) -> str:
     acts = store.list_activities()
-    # max(id), а не acts[0] (верхняя по дате): импорт старой тренировки
-    # после удаления другой тоже должен менять ETag
-    last_id = max(a["id"] for a in acts) if acts else 0
+    # отпечаток всех полей, от которых зависит кадр: импорт, удаление и ручная
+    # смена категории (бег ↔ велосипед) — всё должно перерисовать рамку
+    sig = hashlib.sha256(json.dumps(
+        [(a["id"], a.get("category"), a["distance_m"], a["start_time"]) for a in acts]
+    ).encode()).hexdigest()[:12]
     now = datetime.now()
     week = now.isocalendar()[1]
-    return f'"v{RENDER_VERSION}{FRAME_LANG}-{last_id}-{len(acts)}-{now:%Y%m}-w{week}"'
+    return f'"v{RENDER_VERSION}{FRAME_LANG}-{sig}-{now:%Y%m}-w{week}"'

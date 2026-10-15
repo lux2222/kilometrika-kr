@@ -97,6 +97,71 @@ def test_frame_png_and_etag(client):
     assert r2.status_code == 304
 
 
+def test_frame_etag_changes_on_category(client):
+    """Ручная смена бег↔велосипед меняет итоги на рамке — ETag обязан смениться,
+    иначе рамка получит 304 и останется со старыми цифрами."""
+    _upload(client, "garmin_run.tcx")
+    before = client.get("/api/frame.png").headers["etag"]
+    client.patch("/api/activities/1/category", json={"category": "bike"})
+    r = client.get("/api/frame.png", headers={"If-None-Match": before})
+    assert r.status_code == 200 and r.headers["etag"] != before
+
+
+def test_thumbnails_dont_collide_on_same_stem(client, tmp_path):
+    """sunset.jpg и sunset.png в одной тренировке — разные миниатюры,
+    удаление одного фото не трогает миниатюру другого."""
+    _upload(client, "garmin_run.tcx")
+    from PIL import Image
+    ids = {}
+    for name, color in (("sunset.jpg", (200, 0, 0)), ("sunset.png", (0, 0, 200))):
+        p = tmp_path / name
+        Image.new("RGB", (800, 600), color).save(p)
+        ids[name] = client.post("/api/activities/1/photos",
+                                files={"file": (name, p.read_bytes())}).json()["id"]
+
+    def thumb_color(pid):
+        th = client.get(f"/api/photos/{pid}?thumb=1").content
+        return Image.open(io.BytesIO(th)).convert("RGB").getpixel((5, 5))
+
+    jpg, png = thumb_color(ids["sunset.jpg"]), thumb_color(ids["sunset.png"])
+    assert jpg[0] > 150 and png[2] > 150, (jpg, png)
+    client.delete(f"/api/photos/{ids['sunset.png']}")
+    assert thumb_color(ids["sunset.jpg"])[0] > 150
+
+
+def test_splits_track_starting_offset(client):
+    """Трек возобновлённого круга: накопленная дистанция начинается с 1500 м.
+    Сплиты считаются от старта трека, без отрицательных/выдуманных времён."""
+    from datetime import datetime, timedelta, timezone
+
+    import main
+    from parser import Activity, Trackpoint
+
+    t0 = datetime(2026, 7, 10, 6, 0, tzinfo=timezone.utc)
+    tps = [Trackpoint(time=t0 + timedelta(seconds=30 * i), lat=None, lon=None,
+                      elevation=None, distance=1500 + 100.0 * i, hr=None,
+                      cadence=None, speed=None, watts=None) for i in range(21)]
+    act = Activity(file_hash="offset0000000001", sport="Running", category="run",
+                   start_time=t0, duration_s=600, distance_m=2000, calories=None,
+                   hr_avg=None, hr_max=None, ascent_m=None, descent_m=None,
+                   cadence_avg=None, trackpoints=tps)
+    act_id = main.store.save(act, "offset.tcx")
+    s = client.get(f"/api/activities/{act_id}/splits").json()
+    assert [x["km"] for x in s] == [1.0, 2.0]
+    assert all(abs(x["pace_s_km"] - 300) < 1 for x in s), s
+
+
+def test_upload_too_large_rejected_early(client, monkeypatch):
+    """Слишком большое тело отбивается по Content-Length до приёма целиком."""
+    import main
+    _upload(client, "garmin_run.tcx")
+    monkeypatch.setattr(main, "_MAX_BODY", 1000)
+    r = client.post("/api/activities/1/photos",
+                    files={"file": ("big.mp4", io.BytesIO(b"0" * 5000))})
+    assert r.status_code == 413
+    assert client.get("/api/activities/1").json()["photos"] == []
+
+
 def test_video_roundtrip(client):
     _upload(client, "garmin_run.tcx")
     mp4 = b"\x00\x00\x00\x18ftypmp42" + b"0" * 200      # минимальная mp4-сигнатура

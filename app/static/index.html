@@ -97,11 +97,12 @@
   canvas { max-height: 320px; max-width: 100%; }
 
   .muted { color: var(--dim); }
-  .uprog { font-size: 12px; color: var(--dim); margin: 8px 0 4px; }
+  .uprog { font-size: 13px; color: var(--text); margin: 10px 0 4px; }
   .uprog.err { color: var(--hr); white-space: normal; word-break: break-word; }
-  .uprog .bar { height: 4px; border-radius: 3px; background: var(--line); margin-top: 4px; overflow: hidden; }
+  .uprog .bar { height: 8px; border-radius: 4px; background: var(--line); margin-top: 6px; overflow: hidden; }
   .uprog .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
   .uprog.err .bar { display: none; }
+  #notesStatus.err { color: var(--hr); }
   button.del {
     background: none; border: 1px solid var(--line); color: var(--dim);
     border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px;
@@ -306,6 +307,19 @@ let selectedId = null, actChart = null;
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
+// запрос-действие с честным результатом: при ошибке/обрыве говорим об этом,
+// а не делаем вид, что всё прошло (удаление, смена категории)
+async function send(url, opts) {
+  try {
+    const r = await fetch(url, opts);
+    if (r.ok) return true;
+    alert(`요청 실패: HTTP ${r.status}`);
+  } catch {
+    alert("요청 실패: 서버에 연결할 수 없습니다.");
+  }
+  return false;
+}
+
 const fmtDur = s => {
   if (s == null || !Number.isFinite(s) || s < 0) return "—";
   const h = Math.floor(s/3600), m = Math.floor(s%3600/60);
@@ -371,8 +385,13 @@ function listDuration(a) {
   if (!Number.isFinite(a.duration_s) || a.duration_s <= 0) return '';
   return ` · ${sportCat(a) === 'bike' ? '전체 ' : ''}${detailTime(a.duration_s)}`;
 }
-async function loadList() {
-  const acts = uniqueActivities(await (await fetch("/api/activities")).json());
+let allActs = [];
+async function reload() {
+  allActs = uniqueActivities(await (await fetch("/api/activities")).json());
+  loadList();
+}
+function loadList() {
+  const acts = allActs;
   const list = $("#list");
   list.innerHTML = acts.length ? "" : '<div class="muted">아직 운동 기록이 없습니다</div>';
   const groups = new Map();          // acts отсортированы по дате DESC — годы тоже
@@ -401,6 +420,7 @@ async function loadList() {
     for (const a of items) {
       const el = document.createElement("div");
       el.className = "act" + (a.id === selectedId ? " sel" : "");
+      el.dataset.id = a.id;
       el.style.setProperty("--sport-c", catColor(a));
       el.innerHTML = `<div><div class="date">${fmtDate(a.start_time)}</div><div class="sport" title="원본 운동 유형: ${esc(a.sport)}">${sportLabel(a)}${listDuration(a)}</div></div>
                       ${listMetric(a) ? `<div class="dist">${listMetric(a)}</div>` : ''}`;
@@ -647,6 +667,11 @@ function renderSplits(splits, color, bike = false) {
   }
 }
 
+function markSelected() {
+  document.querySelectorAll("#list .act").forEach(el =>
+    el.classList.toggle("sel", +el.dataset.id === selectedId));
+}
+
 /* DETAIL_A_HELPERS_START */
 function detailTime(s) {
   if (!Number.isFinite(s) || s < 0) return '사용 불가';
@@ -863,6 +888,7 @@ async function showActivity(id) {
   }
   // Every selection has its own version, including repeated clicks on the same ID.
   if (requestVersion !== activityRequestVersion || selectedId !== id) return;
+  markSelected();
   $("#placeholder").hidden = true;
   $("#detail").hidden = false;
   $("#activityTools").hidden = false;
@@ -922,7 +948,6 @@ async function showActivity(id) {
   detailExportRecord = act;
   detailExportReady = Promise.all([zonesReady, weatherReady]);
 
-  loadList();
 }
 
 document.querySelectorAll("#catSeg button").forEach(b => b.onclick = async () => {
@@ -937,7 +962,7 @@ document.querySelectorAll("#catSeg button").forEach(b => b.onclick = async () =>
     });
     if(!response.ok)throw new Error(`HTTP ${response.status}`);
     if(selectedId===id&&activityRequestVersion===version)await showActivity(id);
-    else await loadList();
+    await reload();
   } catch(error) {
     alert('운동 종류를 저장하지 못했습니다: '+error.message);
   } finally {
@@ -947,21 +972,36 @@ document.querySelectorAll("#catSeg button").forEach(b => b.onclick = async () =>
 
 $("#delBtn").onclick = async () => {
   if (!selectedId || !confirm("이 운동 기록을 삭제할까요?")) return;
-  await fetch(`/api/activities/${selectedId}`, { method: "DELETE" });
+  const id = selectedId;
+  if (!await send(`/api/activities/${id}`, { method: "DELETE" })) return;
+  if (selectedId !== id) { await reload(); return; }
+  activityRequestVersion++;
+  detailExportRecord = null;
   selectedId = null;
   $("#detail").hidden = true; $("#placeholder").hidden = false;
   $("#activityTools").hidden = true;
-  loadList();
+  reload();
 };
 
 $("#notesSave").onclick = async () => {
   if (!selectedId) return;
-  await fetch(`/api/activities/${selectedId}/notes`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ notes: $("#notes").value }),
-  });
-  $("#notesStatus").textContent = "저장되었습니다";
-  setTimeout(() => $("#notesStatus").textContent = "", 2000);
+  const id = selectedId, version = activityRequestVersion;
+  const st = $("#notesStatus");
+  st.classList.remove("err"); st.textContent = "저장 중…";
+  try {
+    const r = await fetch(`/api/activities/${id}/notes`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: $("#notes").value }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (selectedId !== id || activityRequestVersion !== version) return;
+    st.textContent = "저장되었습니다";
+    setTimeout(() => { if (st.textContent === "저장되었습니다") st.textContent = ""; }, 2000);
+  } catch {
+    if (selectedId !== id || activityRequestVersion !== version) return;
+    st.classList.add("err");
+    st.textContent = "저장하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.";
+  }
 };
 
 function renderPhotos(photos) {
@@ -978,8 +1018,7 @@ function renderPhotos(photos) {
     if (m) m.onclick = () => window.open(`/api/photos/${p.id}`, "_blank");
     el.querySelector("button").onclick = async () => {
       if (!confirm("이 사진 또는 동영상을 삭제할까요?")) return;
-      await fetch(`/api/photos/${p.id}`, { method: "DELETE" });
-      el.remove();
+      if (await send(`/api/photos/${p.id}`, { method: "DELETE" })) el.remove();
     };
     grid.appendChild(el);
   }
@@ -1008,7 +1047,9 @@ async function uploadBatch(files, url, prog) {
   files = [...files];
   if (!files.length) return;
   const txt = prog.querySelector(".t"), bar = prog.querySelector(".bar > i");
+  clearTimeout(prog._hideT);      // таймер от прошлой партии не должен спрятать эту
   prog.hidden = false; prog.classList.remove("err");
+  prog.scrollIntoView({ block: "nearest" });
   let ok = 0; const errors = [];
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
@@ -1026,28 +1067,33 @@ async function uploadBatch(files, url, prog) {
     txt.textContent = `✗ ${errors.join("; ")}` + (ok ? ` · ${ok}개 추가됨` : "");
   } else {
     bar.style.width = "100%"; txt.textContent = `✓ ${ok}개 업로드 완료`;
-    setTimeout(() => { if (!prog.classList.contains("err")) prog.hidden = true; }, 2500);
+    prog._hideT = setTimeout(() => { prog.hidden = true; }, 4000);
   }
 }
 
 $("#photoInput").onchange = async e => {
-  const files = e.target.files; e.target.value = "";
+  // копия ДО очистки: e.target.files — живой FileList, value="" опустошает его
+  const files = [...e.target.files]; e.target.value = "";
   await uploadBatch(files, `/api/activities/${selectedId}/photos`, $("#photoProg"));
   showActivity(selectedId);
 };
 
 async function uploadFiles(files) {
   await uploadBatch(files, "/api/upload", $("#dropProg"));
-  loadList();
+  reload();
 }
 const drop = $("#drop");
 drop.onclick = () => $("#fileInput").click();
-$("#fileInput").onchange = e => uploadFiles(e.target.files);
+$("#fileInput").onchange = e => {
+  // копия + сброс: иначе повторный выбор того же файла (после сбоя) не сработает
+  const files = [...e.target.files]; e.target.value = "";
+  uploadFiles(files);
+};
 drop.ondragover = e => { e.preventDefault(); drop.classList.add("hover"); };
 drop.ondragleave = () => drop.classList.remove("hover");
 drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hover"); uploadFiles(e.dataTransfer.files); };
 
-loadList();
+reload();
 </script>
 <script src="/static/vendor/html2canvas-1.4.1.min.js"></script>
 <script src="/static/detail-export.js"></script>

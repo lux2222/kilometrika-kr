@@ -1,6 +1,8 @@
 # Kilometrika — 개인용 UI 확장 포크
 
-원본: [m1ty/kilometrika](https://github.com/m1ty/kilometrika), 기준 커밋 `601a0f02ef5a`.
+원본: [m1ty/kilometrika](https://github.com/m1ty/kilometrika), 최초 기준 커밋 `601a0f02ef5a`, main 통합 기준 `c04b49ce7d38`.
+
+main의 업로드 파일 선택·진행 표시, 저장/삭제 실패 처리, 비동기 선택 보호, 썸네일 이름 충돌 방지, 업로드 크기 제한, 구간 거리 기준 및 프레임 ETag 수정을 통합했습니다. 한국어 목록의 연도별 합계와 전용 상세 그래프·근력운동·이미지 내보내기 구성은 유지하며, 제거된 원본 차트 DOM을 다시 참조하지 않도록 목록 캐시와 선택 표시를 적용했습니다.
 `m1ty/kilometrika` 기반 한국어 커스텀 버전입니다. 대상 [lux2222/kilometrika-kr](https://github.com/lux2222/kilometrika-kr)는 GitHub에서 원본의 포크 관계를 유지합니다. 원본 Git 이력과 MIT LICENSE의 `Copyright (c) 2026 m1ty`를 보존합니다.
 
 TCX/GPX 운동 파일을 SQLite에 저장하고 활동 목록·지도·차트를 표시합니다. 기존 개인 기록이나 복구된 DB 없이 빈 데이터 볼륨에서 시작할 수 있습니다.
