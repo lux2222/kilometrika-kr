@@ -8,6 +8,11 @@
 
 그래서 [Kilometrika](https://github.com/m1ty/kilometrika)를 바탕으로 한국어 화면을 만들고, 야외 자전거와 근력운동에 맞춰 표시 항목을 다듬었습니다. 개인이 Docker로 실행하고 자신의 운동 파일을 직접 올려 사용하는 방식입니다.
 
+<img width="1004" height="817" alt="image" src="https://github.com/user-attachments/assets/42bfddf0-88e8-42dd-946d-32b5955103a8" />
+
+<img width="880" height="2798" alt="Kilometrika_자전거_2026-10-11_1808" src="https://github.com/user-attachments/assets/b6cdd767-a016-4290-9566-233787e4d8d2" />
+
+
 ## 무엇을 할 수 있나요?
 
 - **운동 기록 모아 보기:** TCX·GPX 파일을 올리고 날짜별로 찾아볼 수 있습니다. 목록에는 종목에 맞춰 거리나 소모 열량, 운동 시간을 표시합니다.
