@@ -10,7 +10,6 @@
 
 <img width="1004" height="817" alt="image" src="https://github.com/user-attachments/assets/42bfddf0-88e8-42dd-946d-32b5955103a8" />
 
-<img width="880" height="2798" alt="Kilometrika_자전거_2026-10-11_1808" src="https://github.com/user-attachments/assets/b6cdd767-a016-4290-9566-233787e4d8d2" />
 
 
 ## 무엇을 할 수 있나요?
